@@ -1,0 +1,92 @@
+generator client_admin {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+  name     = "admin"
+}
+
+generator client_backend {
+  provider = "prisma-client-js"
+  output   = "../../../japap-backend/node_modules/.prisma/client"
+  name     = "backend"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String              @id @default(uuid())
+  phone           String              @unique
+  name            String?
+  gender          String?
+  role            String              @default("user")
+  reputationScore Int                 @default(0)
+  location        Json?
+  createdAt       DateTime            @default(now())
+  alerts          Alert[]
+  confirmations   AlertConfirmation[]
+  notifications   Notification[]
+  subscriptions   Subscription[]
+}
+
+model Alert {
+  id            String              @id @default(uuid())
+  userId        String?
+  category      String
+  severity      String?
+  description   String?
+  location      Json?
+  mediaUrl      String?
+  expiresAt     DateTime?
+  status        String              @default("active")
+  createdAt     DateTime            @default(now())
+  user          User?               @relation(fields: [userId], references: [id])
+  confirmedBy   AlertConfirmation[]
+  notifications Notification[]
+}
+
+model AlertConfirmation {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  alertId   String
+  type      String
+  createdAt DateTime @default(now())
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, alertId])
+}
+
+model Subscription {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  type      String
+  value     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id      String   @id @default(uuid())
+  userId  String
+  alertId String?
+  title   String
+  content String
+  wasSeen Boolean  @default(false)
+  sentAt  DateTime @default(now())
+  alert   Alert?   @relation(fields: [alertId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+}
+
+model MessageBot {
+  id                  Int      @id @default(autoincrement())
+  platform            String
+  senderPhone         String
+  rawMessage          String
+  interpretedCategory String?
+  interpretedLocation String?
+  interpretedSeverity String?
+  alertCreated        Boolean  @default(false)
+  createdAt           DateTime @default(now())
+}
