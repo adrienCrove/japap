@@ -31,16 +31,18 @@ import { createManualAlert } from '@/lib/api';
 
 // Types de catégories et leurs préfixes de référence
 const INCIDENT_CATEGORIES = {
-  'Incident général': 'INC',
-  'Vol': 'TH',
-  'Disparition': 'DIS',
   'Accident de circulation': 'ACC',
-  'Incendie': 'FIR',
-  'Inondation': 'FLD',
-  'Éboulement': 'LDS',
   'Agression': 'ASS',
+  'Vol': 'TH',
   'Cambriolage': 'BRG',
+  'Disparition': 'DIS',
+  'Catastrophe naturelle': 'NAT',
+  'Incendie': 'FIR',
+  'Panne ou coupure': 'OUT',
+  'Manifestation': 'MAN',
+  'Animal dangereux': 'ANI',
   'Urgence médicale': 'MED',
+  'Autre': 'OTH',
 } as const;
 
 interface MediaFile {
@@ -49,7 +51,95 @@ interface MediaFile {
   type: 'image' | 'video' | 'audio';
 }
 
+// Interfaces pour les champs spécifiques par catégorie
+interface AccidentFields {
+  vehicleType: string;
+  vehicleCount: number;
+  casualties: string;
+  roadBlocked: boolean;
+}
+
+interface AggressionFields {
+  aggressionType: string;
+  weaponInvolved: boolean;
+  weaponType?: string;
+  suspectsFled: boolean;
+  suspectDescription?: string;
+}
+
+interface DisparitionFields {
+  fullName: string;
+  approximateAge: number;
+  gender: string;
+  lastKnownLocation: string;
+  physicalDescription: string;
+  clothingDescription: string;
+  recentPhoto?: string;
+}
+
+interface CatastropheFields {
+  catastropheType: string;
+  damageExtent: string;
+  affectedZones: string;
+  needsEvacuation: boolean;
+  evacuationEstimate?: string;
+}
+
+interface IncendieFields {
+  fireType: string;
+  suspectedSource?: string;
+  spreadRisk: boolean;
+  emergencyServicesInformed: boolean;
+}
+
+interface PanneFields {
+  outageType: string;
+  affectedArea: string;
+  startTime: string;
+  estimatedDuration?: string;
+}
+
+interface ManifestationFields {
+  manifestationType: string;
+  participantCount: string;
+  lawEnforcementPresent: boolean;
+  identifiedRisks?: string;
+}
+
+interface AnimalFields {
+  animalType: string;
+  animalDescription: string;
+  dangerPresumption: boolean;
+  currentLocation: string;
+}
+
+interface UrgenceFields {
+  emergencyType: string;
+  victimCount: number;
+  victimCondition: string;
+  medicalServicesContacted: boolean;
+}
+
+interface AutreFields {
+  customType: string;
+  specificDetails: string;
+}
+
+type CategorySpecificFields = 
+  | AccidentFields 
+  | AggressionFields 
+  | DisparitionFields 
+  | CatastropheFields 
+  | IncendieFields 
+  | PanneFields 
+  | ManifestationFields 
+  | AnimalFields 
+  | UrgenceFields 
+  | AutreFields 
+  | null;
+
 interface AlertFormData {
+  title: string;
   category: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   description: string;
@@ -60,25 +150,26 @@ interface AlertFormData {
   mediaFiles: MediaFile[];
   expiresAt?: string;
   status: 'active' | 'pending';
+  categorySpecificFields: CategorySpecificFields;
 }                   
 
 // Détection automatique de la source selon le canal
 const getSourceFromChannel = (): 'app' | 'whatsapp' | 'telegram' | 'sms' | 'email' | 'web' => {
   // Dans un cas réel, ceci serait déterminé par l'authentification ou le canal d'accès
-  // Pour l'instant, on retourne 'app' pour l'interface admin
+  // Pour l'instant, on retourne 'web' pour l'interface admin
   return 'web';
 };
 
 export default function CreateAlertPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [previewRef, setPreviewRef] = useState('');
+  const [previewRef] = useState('');
   const [gettingLocation, setGettingLocation] = useState(false);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
-  
   const [formData, setFormData] = useState<AlertFormData>({
+    title: '',
     category: '',
     severity: 'medium',
     description: '',
@@ -88,7 +179,8 @@ export default function CreateAlertPage() {
     },
     mediaFiles: [],
     expiresAt: '',
-    status: 'active'
+    status: 'active',
+    categorySpecificFields: null
   });
 
   // Charger Google Maps API - VERSION CORRIGÉE
@@ -225,21 +317,119 @@ useEffect(() => {
     };
   }, [googleMapsLoaded]);
 
-  // Générer la référence d'alerte
-  const generateAlertReference = (category: string): string => {
-    const prefix = INCIDENT_CATEGORIES[category as keyof typeof INCIDENT_CATEGORIES] || 'INC';
-    const randomNumber = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-    return `ALT/${prefix}-${randomNumber}`;
+
+
+  // Initialiser les champs spécifiques selon la catégorie
+  const initializeCategoryFields = (category: string): CategorySpecificFields => {
+    switch (category) {
+      case 'Accident de circulation':
+        return {
+          vehicleType: '',
+          vehicleCount: 1,
+          casualties: '',
+          roadBlocked: false
+        } as AccidentFields;
+      
+      case 'Agression':
+      case 'Vol':
+      case 'Cambriolage':
+        return {
+          aggressionType: '',
+          weaponInvolved: false,
+          weaponType: '',
+          suspectsFled: false,
+          suspectDescription: ''
+        } as AggressionFields;
+      
+      case 'Disparition':
+        return {
+          fullName: '',
+          approximateAge: 0,
+          gender: '',
+          lastKnownLocation: '',
+          physicalDescription: '',
+          clothingDescription: '',
+          recentPhoto: ''
+        } as DisparitionFields;
+      
+      case 'Catastrophe naturelle':
+        return {
+          catastropheType: '',
+          damageExtent: '',
+          affectedZones: '',
+          needsEvacuation: false,
+          evacuationEstimate: ''
+        } as CatastropheFields;
+      
+      case 'Incendie':
+        return {
+          fireType: '',
+          suspectedSource: '',
+          spreadRisk: false,
+          emergencyServicesInformed: false
+        } as IncendieFields;
+      
+      case 'Panne ou coupure':
+        return {
+          outageType: '',
+          affectedArea: '',
+          startTime: '',
+          estimatedDuration: ''
+        } as PanneFields;
+      
+      case 'Manifestation':
+        return {
+          manifestationType: '',
+          participantCount: '',
+          lawEnforcementPresent: false,
+          identifiedRisks: ''
+        } as ManifestationFields;
+      
+      case 'Animal dangereux':
+        return {
+          animalType: '',
+          animalDescription: '',
+          dangerPresumption: false,
+          currentLocation: ''
+        } as AnimalFields;
+      
+      case 'Urgence médicale':
+        return {
+          emergencyType: '',
+          victimCount: 1,
+          victimCondition: '',
+          medicalServicesContacted: false
+        } as UrgenceFields;
+      
+      case 'Autre':
+        return {
+          customType: '',
+          specificDetails: ''
+        } as AutreFields;
+      
+      default:
+        return null;
+    }
   };
 
-  // Mettre à jour la référence quand la catégorie change
+  // Gérer le changement de catégorie
   const handleCategoryChange = (category: string) => {
-    setFormData(prev => ({ ...prev, category }));
-    if (category) {
-      setPreviewRef(generateAlertReference(category));
-    } else {
-      setPreviewRef('');
-    }
+    setFormData(prev => ({
+      ...prev,
+      category,
+      categorySpecificFields: initializeCategoryFields(category)
+    }));
+  };
+
+  // Mettre à jour les champs spécifiques
+  const updateCategoryField = (field: string, value: string | number | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      categorySpecificFields: prev.categorySpecificFields ? {
+        ...prev.categorySpecificFields,
+        [field]: value
+      } : null
+    }));
   };
 
   // Obtenir la position actuelle
@@ -436,6 +626,7 @@ useEffect(() => {
 
     try {
       const alertData = {
+        title: formData.title,
         category: formData.category,
         severity: formData.severity,
         description: formData.description,
@@ -443,14 +634,15 @@ useEffect(() => {
         mediaUrl: formData.mediaFiles.length > 0 ? formData.mediaFiles[0].url : undefined,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : undefined,
         source: getSourceFromChannel(),
-        status: formData.status
+        status: formData.status,
+        categorySpecificFields: formData.categorySpecificFields
       };
 
       const response = await createManualAlert(alertData);
       
       if (response.success) {
         toast.success('Signalement créé avec succès', {
-          description: `Référence: ${response.data?.id || previewRef}`
+          description: `Référence: ${response.data?.ref_alert_id}`
         });
         
         // Nettoyer les URLs d'objets
@@ -462,7 +654,7 @@ useEffect(() => {
           description: response.error
         });
       }
-    } catch (error) {
+    } catch {
       toast.error('Erreur lors de la création du signalement');
     } finally {
       setLoading(false);
@@ -479,6 +671,422 @@ useEffect(() => {
     }
   };
 
+  // Rendu des champs spécifiques par catégorie
+  const renderCategorySpecificFields = () => {
+    if (!formData.category || !formData.categorySpecificFields) return null;
+
+    const fields = formData.categorySpecificFields;
+
+    switch (formData.category) {
+      case 'Accident de circulation':
+        const accidentFields = fields as AccidentFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>🚗</span>
+                <span>Détails de l&apos;accident</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="vehicleType">Type de véhicule</Label>
+                <Select value={accidentFields.vehicleType} onValueChange={(value) => updateCategoryField('vehicleType', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="voiture">Voiture</SelectItem>
+                    <SelectItem value="moto">Moto</SelectItem>
+                    <SelectItem value="camion">Camion</SelectItem>
+                    <SelectItem value="bus">Bus</SelectItem>
+                    <SelectItem value="velo">Vélo</SelectItem>
+                    <SelectItem value="pieton">Piéton</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="vehicleCount">Nombre de véhicules impliqués</Label>
+                <Input
+                  id="vehicleCount"
+                  type="number"
+                  min="1"
+                  value={accidentFields.vehicleCount}
+                  onChange={(e) => updateCategoryField('vehicleCount', parseInt(e.target.value) || 1)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="casualties">Blessés / Morts présumés</Label>
+                <Textarea
+                  id="casualties"
+                  placeholder="Description des victimes..."
+                  value={accidentFields.casualties}
+                  onChange={(e) => updateCategoryField('casualties', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="roadBlocked"
+                  checked={accidentFields.roadBlocked}
+                  onChange={(e) => updateCategoryField('roadBlocked', e.target.checked)}
+                  className="rounded"
+                  title="Route bloquée"
+                />
+                <Label htmlFor="roadBlocked">Route bloquée</Label>
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'Agression':
+      case 'Vol':
+      case 'Cambriolage':
+        const aggressionFields = fields as AggressionFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>🥷</span>
+                <span>Détails de l&apos;incident</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="aggressionType">Type d&apos;agression</Label>
+                <Select value={aggressionFields.aggressionType} onValueChange={(value) => updateCategoryField('aggressionType', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vol_main_armee">Vol à main armée</SelectItem>
+                    <SelectItem value="pickpocket">Pickpocket</SelectItem>
+                    <SelectItem value="cambriolage">Cambriolage</SelectItem>
+                    <SelectItem value="agression_physique">Agression physique</SelectItem>
+                    <SelectItem value="vol_vehicule">Vol de véhicule</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="weaponInvolved"
+                  checked={aggressionFields.weaponInvolved}
+                  onChange={(e) => updateCategoryField('weaponInvolved', e.target.checked)}
+                  className="rounded"
+                  title="Arme impliquée"
+                />
+                <Label htmlFor="weaponInvolved">Arme impliquée</Label>
+              </div>
+              
+              {aggressionFields.weaponInvolved && (
+                <div>
+                  <Label htmlFor="weaponType">Type d&apos;arme</Label>
+                  <Input
+                    id="weaponType"
+                    placeholder="Description de l'arme..."
+                    value={aggressionFields.weaponType || ''}
+                    onChange={(e) => updateCategoryField('weaponType', e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="suspectsFled"
+                  checked={aggressionFields.suspectsFled}
+                  onChange={(e) => updateCategoryField('suspectsFled', e.target.checked)}
+                  className="rounded"
+                  title="Suspect(s) en fuite"
+                />
+                <Label htmlFor="suspectsFled">Suspect(s) en fuite</Label>
+              </div>
+              
+              <div>
+                <Label htmlFor="suspectDescription">Description suspect(s)</Label>
+                <Textarea
+                  id="suspectDescription"
+                  placeholder="Description physique, vêtements, direction de fuite..."
+                  value={aggressionFields.suspectDescription || ''}
+                  onChange={(e) => updateCategoryField('suspectDescription', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'Disparition':
+        const disparitionFields = fields as DisparitionFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>👤</span>
+                <span>Détails de la personne disparue</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="fullName">Nom complet *</Label>
+                <Input
+                  id="fullName"
+                  placeholder="Nom et prénom..."
+                  value={disparitionFields.fullName}
+                  onChange={(e) => updateCategoryField('fullName', e.target.value)}
+                  className="mt-1"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="approximateAge">Âge approximatif</Label>
+                  <Input
+                    id="approximateAge"
+                    type="number"
+                    min="0"
+                    max="120"
+                    value={disparitionFields.approximateAge}
+                    onChange={(e) => updateCategoryField('approximateAge', parseInt(e.target.value) || 0)}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="gender">Genre</Label>
+                  <Select value={disparitionFields.gender} onValueChange={(value) => updateCategoryField('gender', value)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Sélectionner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="homme">Homme</SelectItem>
+                      <SelectItem value="femme">Femme</SelectItem>
+                      <SelectItem value="enfant">Enfant</SelectItem>
+                      <SelectItem value="non_specifie">Non spécifié</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="lastKnownLocation">Dernière localisation connue</Label>
+                <Input
+                  id="lastKnownLocation"
+                  placeholder="Dernier endroit où la personne a été vue..."
+                  value={disparitionFields.lastKnownLocation}
+                  onChange={(e) => updateCategoryField('lastKnownLocation', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="physicalDescription">Description physique</Label>
+                <Textarea
+                  id="physicalDescription"
+                  placeholder="Taille, corpulence, couleur de cheveux, signes distinctifs..."
+                  value={disparitionFields.physicalDescription}
+                  onChange={(e) => updateCategoryField('physicalDescription', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="clothingDescription">Vêtements portés</Label>
+                <Textarea
+                  id="clothingDescription"
+                  placeholder="Description des vêtements lors de la disparition..."
+                  value={disparitionFields.clothingDescription}
+                  onChange={(e) => updateCategoryField('clothingDescription', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'Urgence médicale':
+        const urgenceFields = fields as UrgenceFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>🩺</span>
+                <span>Détails de l&apos;urgence médicale</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="emergencyType">Type d&apos;urgence</Label>
+                <Select value={urgenceFields.emergencyType} onValueChange={(value) => updateCategoryField('emergencyType', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="accident">Accident</SelectItem>
+                    <SelectItem value="malaise">Malaise</SelectItem>
+                    <SelectItem value="crise">Crise (cardiaque, épilepsie...)</SelectItem>
+                    <SelectItem value="blessure_grave">Blessure grave</SelectItem>
+                    <SelectItem value="intoxication">Intoxication</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="victimCount">Nombre de victimes</Label>
+                <Input
+                  id="victimCount"
+                  type="number"
+                  min="1"
+                  value={urgenceFields.victimCount}
+                  onChange={(e) => updateCategoryField('victimCount', parseInt(e.target.value) || 1)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="victimCondition">État des victimes</Label>
+                <Textarea
+                  id="victimCondition"
+                  placeholder="Description de l'état des victimes..."
+                  value={urgenceFields.victimCondition}
+                  onChange={(e) => updateCategoryField('victimCondition', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="medicalServicesContacted"
+                  checked={urgenceFields.medicalServicesContacted}
+                  onChange={(e) => updateCategoryField('medicalServicesContacted', e.target.checked)}
+                  className="rounded"
+                  title="Services médicaux contactés"
+                />
+                <Label htmlFor="medicalServicesContacted">Services médicaux contactés</Label>
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'Incendie':
+        const incendieFields = fields as IncendieFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>🔥</span>
+                <span>Détails de l&apos;incendie</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="fireType">Type d&apos;incendie</Label>
+                <Select value={incendieFields.fireType} onValueChange={(value) => updateCategoryField('fireType', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="domestique">Domestique</SelectItem>
+                    <SelectItem value="foret">Forêt</SelectItem>
+                    <SelectItem value="industriel">Industriel</SelectItem>
+                    <SelectItem value="vehicule">Véhicule</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="suspectedSource">Source supposée</Label>
+                <Input
+                  id="suspectedSource"
+                  placeholder="Origine présumée de l'incendie..."
+                  value={incendieFields.suspectedSource || ''}
+                  onChange={(e) => updateCategoryField('suspectedSource', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="spreadRisk"
+                  checked={incendieFields.spreadRisk}
+                  onChange={(e) => updateCategoryField('spreadRisk', e.target.checked)}
+                  className="rounded"
+                  title="Risque de propagation"
+                />
+                <Label htmlFor="spreadRisk">Risque de propagation</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="emergencyServicesInformed"
+                  checked={incendieFields.emergencyServicesInformed}
+                  onChange={(e) => updateCategoryField('emergencyServicesInformed', e.target.checked)}
+                  className="rounded"
+                  title="Services d&apos;urgence informés"
+                />
+                <Label htmlFor="emergencyServicesInformed">Services d&apos;urgence informés</Label>
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      case 'Autre':
+        const autreFields = fields as AutreFields;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>❓</span>
+                <span>Détails spécifiques</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="customType">Type personnalisé</Label>
+                <Input
+                  id="customType"
+                  placeholder="Spécifiez le type d'incident..."
+                  value={autreFields.customType}
+                  onChange={(e) => updateCategoryField('customType', e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="specificDetails">Détails spécifiques</Label>
+                <Textarea
+                  id="specificDetails"
+                  placeholder="Informations détaillées sur l'incident..."
+                  value={autreFields.specificDetails}
+                  onChange={(e) => updateCategoryField('specificDetails', e.target.value)}
+                  className="mt-1 min-h-[100px]"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        );
+
+      // Continuer avec les autres catégories...
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-6  mx-auto">
       {/* Page Header */}
@@ -487,7 +1095,7 @@ useEffect(() => {
           <Breadcrumb />
           <h1 className="text-3xl font-bold text-gray-900">Créer un signalement</h1>
           <p className="text-gray-600 mt-2">
-            Création manuelle d'un nouveau signalement administrateur
+            Création manuelle d&apos;un nouveau signalement administrateur
           </p>
         </div>
         <Button variant="outline" onClick={() => router.back()}>
@@ -496,19 +1104,7 @@ useEffect(() => {
         </Button>
       </div>
 
-      {/* Aperçu de la référence */}
-      {previewRef && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="py-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium text-blue-900">Référence générée :</span>
-              <Badge variant="outline" className="bg-white text-blue-800 border-blue-300">
-                {previewRef}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 gap-6">
@@ -524,6 +1120,21 @@ useEffect(() => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+            {previewRef && (
+                <Card className="border-blue-200 bg-blue-50">
+                  <CardContent className="py-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-medium text-blue-900">Référence générée :</span>
+                      <Badge variant="outline" className="bg-white text-blue-800 border-blue-300">
+                        {previewRef}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+
+              <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category">Catégorie *</Label>
                 <Select value={formData.category} onValueChange={handleCategoryChange}>
@@ -539,47 +1150,56 @@ useEffect(() => {
                   </SelectContent>
                 </Select>
               </div>
-
+                <div>
+                  <Label htmlFor="severity">Niveau de gravité *</Label>
+                  <Select value={formData.severity} onValueChange={(value: 'low' | 'medium' | 'high' | 'critical') => setFormData(prev => ({ ...prev, severity: value }))}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-3 h-3 rounded-full bg-green-500`}></span>
+                          <span>Faible</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="medium">
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-3 h-3 rounded-full bg-yellow-500`}></span>
+                          <span>Moyenne</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="high">
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-3 h-3 rounded-full bg-orange-500`}></span>
+                          <span>Élevée</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="critical">
+                        <div className="flex items-center space-x-2">
+                          <span className={`w-3 h-3 rounded-full bg-red-500`}></span>
+                          <span>Critique</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {/*formData.severity && (
+                    <Badge className={`mt-2 ${getSeverityColor(formData.severity)}`}>
+                      {formData.severity === 'critical' ? 'Critique' :
+                      formData.severity === 'high' ? 'Élevée' :
+                      formData.severity === 'medium' ? 'Moyenne' : 'Faible'}
+                    </Badge>
+                  )*/}
+                </div>
+              </div>
               <div>
-                <Label htmlFor="severity">Niveau de gravité *</Label>
-                <Select value={formData.severity} onValueChange={(value: any) => setFormData(prev => ({ ...prev, severity: value }))}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">
-                      <div className="flex items-center space-x-2">
-                        <span className={`w-3 h-3 rounded-full bg-green-500`}></span>
-                        <span>Faible</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="medium">
-                      <div className="flex items-center space-x-2">
-                        <span className={`w-3 h-3 rounded-full bg-yellow-500`}></span>
-                        <span>Moyenne</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="high">
-                      <div className="flex items-center space-x-2">
-                        <span className={`w-3 h-3 rounded-full bg-orange-500`}></span>
-                        <span>Élevée</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="critical">
-                      <div className="flex items-center space-x-2">
-                        <span className={`w-3 h-3 rounded-full bg-red-500`}></span>
-                        <span>Critique</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                {formData.severity && (
-                  <Badge className={`mt-2 ${getSeverityColor(formData.severity)}`}>
-                    {formData.severity === 'critical' ? 'Critique' :
-                     formData.severity === 'high' ? 'Élevée' :
-                     formData.severity === 'medium' ? 'Moyenne' : 'Faible'}
-                  </Badge>
-                )}
+                <Label htmlFor="title">Titre du signalement</Label>
+                <Input
+                  id="title"
+                  placeholder="Titre du signalement"
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                />
               </div>
 
               <div>
@@ -608,6 +1228,9 @@ useEffect(() => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Champs spécifiques par catégorie */}
+          {renderCategorySpecificFields()}
 
           {/* Localisation */}
           <Card>
@@ -664,7 +1287,7 @@ useEffect(() => {
             )}
             {!googleMapsLoaded && (
               <p className="text-xs text-orange-600 mt-1">
-                ⚠️ Chargement de Google Maps en cours. La recherche d'adresse sera disponible dans quelques instants.
+                ⚠️ Chargement de Google Maps en cours. La recherche d&apos;adresse sera disponible dans quelques instants.
               </p>
             )}
           </div>

@@ -1,3 +1,4 @@
+// japap-backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -25,10 +26,14 @@ model User {
 model Alert {
   id            String              @id @default(uuid())
   userId        String?
+  ref_alert_id  String
+  title         String
+  displayTitle  String
   category      String
   severity      String?
   description   String?
   location      Json?
+  source        String?
   mediaUrl      String?
   expiresAt     DateTime?
   status        String              @default("active")

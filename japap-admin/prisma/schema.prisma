@@ -33,6 +33,9 @@ model User {
 model Alert {
   id            String              @id @default(uuid())
   userId        String?
+  ref_alert_id  String?
+  title         String?
+  displayTitle  String?
   category      String
   severity      String?
   description   String?

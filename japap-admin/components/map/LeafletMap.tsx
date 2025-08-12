@@ -20,6 +20,7 @@ interface MapAlert {
   severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'active' | 'pending' | 'resolved';
   description: string;
+  title: string;
   location: {
     lat: number;
     lng: number;
@@ -105,6 +106,15 @@ export default function LeafletMap({
     }
 
     return () => {
+      // Clean up zone pulse intervals
+      if (zoneLayersRef.current) {
+        zoneLayersRef.current.eachLayer((layer: any) => {
+          if (layer._pulseInterval) {
+            clearInterval(layer._pulseInterval);
+          }
+        });
+      }
+      
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -124,7 +134,7 @@ export default function LeafletMap({
 
   const createAlertIcon = (alert: MapAlert, isSelected: boolean = false) => {
     const color = getSeverityColor(alert.severity);
-    const size = isSelected ? 30 : 20;
+    const size = isSelected ? 40 : 28; // Augmentation de la taille : 20→28, 30→40
     
     return L.divIcon({
       html: `
@@ -138,7 +148,7 @@ export default function LeafletMap({
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 10px;
+          font-size: ${size * 0.5}px;
           color: white;
           font-weight: bold;
         ">
@@ -186,7 +196,24 @@ export default function LeafletMap({
           [alert.location.lat, alert.location.lng],
           { icon: createAlertIcon(alert, isSelected) }
         );
-        const popupContent = `...`;
+        const popupContent = `
+          <div class="min-w-[200px] p-2">
+            <div class="font-semibold text-gray-800 mb-2 text-sm">${alert.title || alert.description}</div>
+            <div class="space-y-1">
+              <div class="flex items-center text-xs text-gray-600">
+                <span class="font-medium mr-2">Type:</span>
+                <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">${alert.category}</span>
+              </div>
+              <div class="text-xs text-gray-600 mt-2">
+                <span class="font-medium">📍 Localisation:</span><br/>
+                <span class="text-gray-700">${alert.location.address}</span>
+              </div>
+              <div class="text-xs text-gray-500 mt-2 pt-2 border-t">
+                ${alert.confirmations} confirmation${alert.confirmations !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+        `;
         marker.bindPopup(popupContent);
         marker.on('click', () => onAlertSelect(alert));
         alertMarkersRef.current.addLayer(marker);
@@ -196,28 +223,87 @@ export default function LeafletMap({
 
   useEffect(() => {
     if (!mapInstanceRef.current || !onZoneSelect) return;
+    
+    // Clean up existing intervals before clearing layers
+    zoneLayersRef.current.eachLayer((layer: any) => {
+      if (layer._pulseInterval) {
+        clearInterval(layer._pulseInterval);
+      }
+    });
+    
     zoneLayersRef.current.clearLayers();
 
     if (layers.zones) {
-      zones.forEach(zone => {
+      zones.forEach((zone, index) => {
         const isSelected = selectedZone?.id === zone.id;
-        const style = {
-          color: isSelected ? '#DC2626' : '#3B82F6',
-          weight: isSelected ? 3 : 2,
-          opacity: 0.8,
-          fillColor: isSelected ? '#FEE2E2' : '#DBEAFE',
-          fillOpacity: 0.3
+        const isActive = zone.active;
+        
+        // Base style for zones
+        const baseStyle = {
+          color: isSelected ? '#DC2626' : (isActive ? '#10B981' : '#3B82F6'),
+          weight: isSelected ? 4 : (isActive ? 3 : 2),
+          opacity: isSelected ? 1 : (isActive ? 0.9 : 0.7),
+          fillColor: isSelected ? '#FEE2E2' : (isActive ? '#D1FAE5' : '#DBEAFE'),
+          fillOpacity: isSelected ? 0.4 : (isActive ? 0.35 : 0.2)
         };
+
         let layer: L.Layer;
         if (zone.type === 'circle' && zone.radius) {
-          layer = L.circle([zone.coordinates[0][0], zone.coordinates[0][1]], { radius: zone.radius, ...style });
+          layer = L.circle([zone.coordinates[0][0], zone.coordinates[0][1]], { 
+            radius: zone.radius, 
+            ...baseStyle,
+            className: isActive ? 'zone-active-circle' : 'zone-circle'
+          });
         } else {
           const latLngs: L.LatLngExpression[] = zone.coordinates.map(coord => [coord[0], coord[1]]);
-          layer = L.polygon(latLngs, style);
+          layer = L.polygon(latLngs, { 
+            ...baseStyle,
+            className: isActive ? 'zone-active-polygon' : 'zone-polygon'
+          });
         }
-        const popupContent = `...`;
+
+        // Popup content with more details
+        const popupContent = `
+          <div class="font-semibold text-blue-900">${zone.name}</div>
+          <div class="text-xs text-gray-600 mt-1">
+            Type: ${zone.type === 'circle' ? 'Zone circulaire' : 'Zone polygonale'}
+          </div>
+          <div class="text-xs text-gray-600">
+            Alertes: ${zone.alertCount}
+          </div>
+          <div class="text-xs mt-2">
+            <span class="inline-block w-2 h-2 rounded-full ${isActive ? 'bg-green-500' : 'bg-gray-400'} mr-1"></span>
+            ${isActive ? 'Zone active' : 'Zone inactive'}
+          </div>
+        `;
+        
         layer.bindPopup(popupContent);
         layer.on('click', () => onZoneSelect(zone));
+        
+        // Add pulsing animation for active zones
+        if (isActive) {
+          setTimeout(() => {
+            if (layer instanceof L.Circle || layer instanceof L.Polygon) {
+              // Create a pulsing effect by temporarily changing opacity
+              const originalOpacity = layer.options.fillOpacity;
+              const pulseAnimation = () => {
+                if (layer && mapInstanceRef.current?.hasLayer(layer)) {
+                  layer.setStyle({ fillOpacity: 0.6 });
+                  setTimeout(() => {
+                    if (layer && mapInstanceRef.current?.hasLayer(layer)) {
+                      layer.setStyle({ fillOpacity: originalOpacity });
+                    }
+                  }, 800);
+                }
+              };
+              // Start pulsing animation with slight delay for each zone
+              const pulseInterval = setInterval(pulseAnimation, 3000);
+              // Store interval reference for cleanup
+              (layer as any)._pulseInterval = pulseInterval;
+            }
+          }, index * 500); // Stagger the animations
+        }
+        
         zoneLayersRef.current.addLayer(layer);
       });
     }

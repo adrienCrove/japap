@@ -55,7 +55,7 @@ export default function AlertsPage() {
     setLoading(true);
     const response = await fetchAlerts(filters);
     if (response.success && response.data) {
-      setAlerts(response.data.alerts);
+      setAlerts(response.data.alerts || []);
       setPagination(response.data.pagination);
     } else {
       toast.error("Erreur de chargement des alertes", {
@@ -293,7 +293,7 @@ export default function AlertsPage() {
           <div className="flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-red-600" />
           </div>
-        ) : alerts.length > 0 ? (
+        ) : (alerts?.length ?? 0) > 0 ? (
           alerts.map((alert) => (
             <Card key={alert.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
@@ -311,9 +311,13 @@ export default function AlertsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        {/* Header with ID, Status, Severity */}
+                        {/* Header with Display Title */}
                         <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{alert.id}</h3>
+                          <div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
+                              {alert.category}
+                            </span>
+                          </div>
                           <Badge className={getStatusColor(alert.status)}>
                             {alert.status === 'active' ? 'Active' : 
                              alert.status === 'pending' ? 'En attente' :
@@ -327,26 +331,30 @@ export default function AlertsPage() {
                           <span className="text-sm text-gray-500">
                             {getSourceIcon(alert.source)} {alert.source}
                           </span>
+                          
+                          
+                        </div>
+                        {/* titre */}
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">{alert.displayTitle}</h3>
+                        </div>
+                        <div className="flex text-xs items-center space-x-2 mb-2 text-gray-400">
+                            {/* <MapPin className="h-4 w-4" /> */}
+                            <span>{alert.location.address}</span>
                         </div>
 
                         {/* Category and Description */}
-                        <div className="mb-3">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                            {alert.category}
-                          </span>
+                        <div className="mb-3">                         
                           <p className="text-gray-700">{alert.description}</p>
                         </div>
 
                         {/* Location and User Info */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4" />
-                            <span>{alert.location.address}</span>
-                          </div>
+                        
                           <div className="flex items-center space-x-2">
                             <User className="h-4 w-4" />
-                            <span>{alert.user.phone}</span>
-                            <span className="text-green-600">(Score: {alert.user.reputationScore})</span>
+                            <span>{alert.user?.phone || 'N/A'}</span>
+                            <span className="text-green-600">(Score: {alert.user?.reputationScore || 'N/A'})</span>
                           </div>
                         </div>
 

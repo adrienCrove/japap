@@ -65,7 +65,10 @@ export interface RecentActivity {
 // Interfaces des Alertes
 export interface Alert {
   id: string;
+  ref_alert_id: string;
   category: string;
+  title: string;
+  displayTitle: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'active' | 'pending' | 'expired' | 'false';
   description: string;
@@ -85,7 +88,9 @@ export interface Alert {
   source: 'app' | 'whatsapp' | 'telegram' | 'web';
 }
 
-export type AlertCreationData = Omit<Alert, 'id' | 'createdAt' | 'user' | 'confirmations'>;
+export type AlertCreationData = Omit<Alert, 'id' | 'createdAt' | 'user' | 'confirmations' | 'ref_alert_id' | 'displayTitle'> & {
+  title: string; // Rendre le titre obligatoire à la création
+};
 
 
 export interface AlertsApiResponse {
