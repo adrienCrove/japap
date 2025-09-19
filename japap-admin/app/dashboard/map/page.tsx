@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,7 +36,7 @@ const Map = dynamic(() => import('@/components/map/LeafletMap'), {
 interface MapAlert {
   id: string;
   category: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: 'faible' | 'moyen' | 'elevé' | 'critique';
   status: 'active' | 'pending' | 'resolved';
   description: string;
   title: string;
@@ -94,14 +94,15 @@ export default function MapPage() {
   // States for alerts filtering and search
   const [alertSearchQuery, setAlertSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('nouvelles');
-  const [selectedRegion, setSelectedRegion] = useState('');
+  const [selectedRegion, setSelectedRegion] = useState(''); // Pour le left panel
+  const [mapSelectedRegion, setMapSelectedRegion] = useState('overview'); // Pour le region selector de la map zone
 
 
   // Google Maps functionality temporarily disabled for type safety
   // Will be re-enabled with proper type definitions later
 
   // Données des régions du Cameroun avec leurs coordonnées
-  const cameroonRegions = [
+  const cameroonRegions = useMemo(() => [
     { id: 'adamawa', name: 'Adamaoua', lat: 7.3697, lng: 12.7503, zoom: 8 },
     { id: 'centre', name: 'Centre', lat: 3.8480, lng: 11.5021, zoom: 8 },
     { id: 'east', name: 'Est', lat: 4.3732, lng: 15.7765, zoom: 8 },
@@ -112,11 +113,28 @@ export default function MapPage() {
     { id: 'south', name: 'Sud', lat: 2.9840, lng: 11.5183, zoom: 8 },
     { id: 'southwest', name: 'Sud-Ouest', lat: 4.9553, lng: 9.2693, zoom: 9 },
     { id: 'west', name: 'Ouest', lat: 5.4755, lng: 10.4183, zoom: 9 }
-  ];
+  ], []);
 
-  // Fonction pour gérer le changement de région
+  // Fonction pour gérer le changement de région (left panel)
   const handleRegionChange = (regionId: string) => {
     setSelectedRegion(regionId);
+    
+    if (regionId === 'overview') {
+      // Vue d'ensemble du Cameroun
+      setMapCenter([6.0, 12.0]);
+      setMapZoom(6);
+    } else {
+      const region = cameroonRegions.find(r => r.id === regionId);
+      if (region) {
+        setMapCenter([region.lat, region.lng]);
+        setMapZoom(region.zoom);
+      }
+    }
+  };
+
+  // Fonction pour gérer le changement de région (map zone - indépendante)
+  const handleMapRegionChange = (regionId: string) => {
+    setMapSelectedRegion(regionId);
     
     if (regionId === 'overview') {
       // Vue d'ensemble du Cameroun
@@ -394,13 +412,43 @@ export default function MapPage() {
     });
   }, [alerts, activeTab, alertSearchQuery]);
   
+  // Fonction pour vérifier si une alerte appartient à une région donnée
+  const isAlertInRegion = useCallback((alert: MapAlert, regionId: string): boolean => {
+    if (!regionId || regionId === 'overview') return true;
+    
+    const region = cameroonRegions.find(r => r.id === regionId);
+    if (!region) return true;
+    
+    // Calcul de la distance en kilomètres en utilisant la formule haversine
+    const alertLat = alert.location.lat;
+    const alertLng = alert.location.lng;
+    const regionLat = region.lat;
+    const regionLng = region.lng;
+    
+    // Distance approximative en degrés
+    const distance = Math.sqrt(
+      Math.pow(alertLat - regionLat, 2) + Math.pow(alertLng - regionLng, 2)
+    );
+    
+    const threshold = thresholds[regionId] || 120;
+    
+    return distance <= threshold;
+  }, [cameroonRegions]);
+
+  // Filtrage des alertes pour la carte basé sur mapSelectedRegion
+  const mapFilteredAlerts = useMemo(() => {
+    if (!mapSelectedRegion || mapSelectedRegion === 'overview') return filteredAlerts;
+    
+    return filteredAlerts.filter(alert => isAlertInRegion(alert, mapSelectedRegion));
+  }, [filteredAlerts, mapSelectedRegion, isAlertInRegion]);
+
   const allMapMarkers = useMemo(() => {
-    const markers = [...filteredAlerts];
+    const markers = [...mapFilteredAlerts];
     if (searchedLocation) {
         markers.push({
             id: 'search-result',
             category: 'Résultat de recherche',
-            severity: 'low',
+            severity: 'faible',
             status: 'resolved', // to give it a neutral look
             title: 'Lieu recherché',
             description: searchedLocation.address,
@@ -410,7 +458,7 @@ export default function MapPage() {
         });
     }
     return markers;
-  }, [filteredAlerts, searchedLocation]);
+  }, [mapFilteredAlerts, searchedLocation]);
   
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-red-600" /></div>;
 
@@ -431,7 +479,7 @@ export default function MapPage() {
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Sélectionner une région" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="w-[368px]">
                 <SelectItem value="overview">🇨🇲 Vue d&apos;ensemble du Cameroun</SelectItem>
                 {cameroonRegions.map((region) => (
                   <SelectItem key={region.id} value={region.id}>
@@ -599,21 +647,21 @@ export default function MapPage() {
       {/* Main Map Area */}
       <div className="flex-1 flex flex-col">
         <div className="flex-1 relative">
-          {/* Region Selector - Absolute positioned on map (solution qui fonctionnait) */}
-          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-4 z-[1000] min-w-[280px]">
+          {/* Region Selector - Absolute positioned on map (indépendant du left panel) */}
+          <div className="absolute top-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-[9999] w-[320px]">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 flex items-center">
                 <MapPin className="h-4 w-4 mr-2" />
-                Région du Cameroun
+                Navigation Carte
               </label>
-              <Select value={selectedRegion} onValueChange={handleRegionChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Sélectionner une région" />
+              <Select value={mapSelectedRegion} onValueChange={handleMapRegionChange}>
+                <SelectTrigger className="w-full bg-white border-gray-300 hover:border-gray-400 focus:border-blue-500">
+                  <SelectValue placeholder="Naviguer vers une région" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="overview">🇨🇲 Vue d&apos;ensemble du Cameroun</SelectItem>
+                <SelectContent className="w-[320px] z-[10000] bg-white border border-gray-200 shadow-xl">
+                  <SelectItem value="overview" className="cursor-pointer hover:bg-gray-100">🇨🇲 Vue d&apos;ensemble du Cameroun</SelectItem>
                   {cameroonRegions.map((region) => (
-                    <SelectItem key={region.id} value={region.id}>
+                    <SelectItem key={region.id} value={region.id} className="cursor-pointer hover:bg-gray-100">
                       📍 {region.name}
                     </SelectItem>
                   ))}

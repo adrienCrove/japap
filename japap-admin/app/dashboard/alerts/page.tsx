@@ -1,15 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import {
   fetchAlerts,
   performBulkAction,
+  updateAlert,
   type Alert,
   type AlertsFilters,
   type BulkAction,
@@ -17,7 +22,6 @@ import {
 } from '@/lib/api';
 import { 
   AlertTriangle, 
-  MapPin, 
   Clock, 
   User, 
   Filter,
@@ -41,7 +45,11 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedAlerts, setSelectedAlerts] = useState<string[]>([]);
+  const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const [filters, setFilters] = useState<AlertsFilters>({
     status: 'all',
     category: 'all',
@@ -51,23 +59,65 @@ export default function AlertsPage() {
     limit: PAGE_LIMIT
   });
 
-  const loadAlerts = useCallback(async () => {
-    setLoading(true);
+  const loadAlerts = useCallback(async (reset = true) => {
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     const response = await fetchAlerts(filters);
     if (response.success && response.data) {
-      setAlerts(response.data.alerts || []);
+      if (reset) {
+        setAlerts(response.data.alerts || []);
+      } else {
+        setAlerts(prev => [...prev, ...(response.data?.alerts || [])]);
+      }
       setPagination(response.data.pagination);
     } else {
       toast.error("Erreur de chargement des alertes", {
         description: response.error,
       });
     }
-    setLoading(false);
+    
+    if (reset) {
+      setLoading(false);
+    } else {
+      setLoadingMore(false);
+    }
   }, [filters]);
+
+  const loadMoreAlerts = useCallback(async () => {
+    if (!pagination || pagination.page >= pagination.totalPages || loadingMore) return;
+    
+    const nextFilters = { ...filters, page: pagination.page + 1 };
+    setLoadingMore(true);
+    
+    const response = await fetchAlerts(nextFilters);
+    if (response.success && response.data) {
+      setAlerts(prev => [...prev, ...(response.data?.alerts || [])]);
+      setPagination(response.data.pagination);
+    }
+    setLoadingMore(false);
+  }, [filters, pagination, loadingMore]);
 
   useEffect(() => {
     loadAlerts();
   }, [loadAlerts]);
+
+  // Intersection Observer pour l'infinite scroll
+  const lastAlertElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (loading || loadingMore) return;
+    if (observerRef.current) observerRef.current.disconnect();
+    
+    observerRef.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && pagination && pagination.page < pagination.totalPages) {
+        loadMoreAlerts();
+      }
+    });
+    
+    if (node) observerRef.current.observe(node);
+  }, [loading, loadingMore, pagination, loadMoreAlerts]);
 
   const handleFilterChange = (key: keyof AlertsFilters, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 1 }));
@@ -140,6 +190,28 @@ export default function AlertsPage() {
         return res.message || `Action '${action}' effectuée avec succès.`;
       },
       error: (err) => `Erreur lors de l'action : ${err.toString()}`,
+    });
+  };
+
+  const handleEditAlert = (alert: Alert) => {
+    setEditingAlert(alert);
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateAlert = async (updatedData: Partial<Alert>) => {
+    if (!editingAlert) return;
+
+    const promise = updateAlert(editingAlert.id, updatedData);
+    
+    toast.promise(promise, {
+      loading: 'Mise à jour en cours...',
+      success: () => {
+        loadAlerts(); // Recharger les données
+        setEditDialogOpen(false);
+        setEditingAlert(null);
+        return 'Alerte mise à jour avec succès';
+      },
+      error: (err) => `Erreur lors de la mise à jour : ${err.toString()}`,
     });
   };
 
@@ -294,8 +366,12 @@ export default function AlertsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-red-600" />
           </div>
         ) : (alerts?.length ?? 0) > 0 ? (
-          alerts.map((alert) => (
-            <Card key={alert.id} className="hover:shadow-md transition-shadow">
+          alerts.map((alert, index) => (
+            <Card 
+              key={alert.id} 
+              className="hover:shadow-md transition-shadow"
+              ref={index === alerts.length - 6 ? lastAlertElementRef : null}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start space-x-4">
                   {/* Checkbox */}
@@ -383,7 +459,11 @@ export default function AlertsPage() {
                           <Eye className="h-4 w-4 mr-1" />
                           Voir
                         </Button>
-                        <Button size="sm" variant="outline">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleEditAlert(alert)}
+                        >
                           <Edit className="h-4 w-4 mr-1" />
                           Éditer
                         </Button>
@@ -412,6 +492,14 @@ export default function AlertsPage() {
             <p>Essayez de modifier vos filtres pour voir plus de résultats.</p>
           </div>
         )}
+        
+        {/* Indicateur de chargement pour l'infinite scroll */}
+        {loadingMore && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-red-600" />
+            <span className="ml-2 text-gray-600">Chargement d&apos;autres alertes...</span>
+          </div>
+        )}
       </div>
 
       {/* Pagination */}
@@ -438,6 +526,148 @@ export default function AlertsPage() {
           </div>
         </div>
       )}
+
+      {/* Modale d'édition */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogClose onClose={() => setEditDialogOpen(false)} />
+          <DialogHeader>
+            <DialogTitle>Modifier l&apos;alerte</DialogTitle>
+          </DialogHeader>
+          {editingAlert && <EditAlertForm alert={editingAlert} onUpdate={handleUpdateAlert} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+// Composant de formulaire d'édition
+interface EditAlertFormProps {
+  alert: Alert;
+  onUpdate: (data: Partial<Alert>) => void;
+}
+
+const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
+  const [formData, setFormData] = useState({
+    displayTitle: alert.displayTitle || '',
+    description: alert.description || '',
+    category: alert.category || '',
+    severity: alert.severity || 'medium',
+    status: alert.status || 'pending',
+    location: {
+      address: alert.location?.address || '',
+      coordinates: alert.location?.coordinates || [0, 0]
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdate(formData);
+  };
+
+  const handleChange = (field: string, value: string | number | [number, number]) => {
+    if (field.startsWith('location.')) {
+      const locationField = field.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        location: {
+          ...prev.location,
+          [locationField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="displayTitle">Titre d&apos;affichage</Label>
+        <Input
+          id="displayTitle"
+          value={formData.displayTitle}
+          onChange={(e) => handleChange('displayTitle', e.target.value)}
+          className="mt-1"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="description">Description</Label>
+        <Textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => handleChange('description', e.target.value)}
+          rows={3}
+          className="mt-1"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="category">Catégorie</Label>
+          <Select value={formData.category} onValueChange={(value) => handleChange('category', value)}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Sélectionner une catégorie" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Accident de circulation">Accident de circulation</SelectItem>
+              <SelectItem value="Incendie">Incendie</SelectItem>
+              <SelectItem value="Inondation">Inondation</SelectItem>
+              <SelectItem value="Éboulement">Éboulement</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="severity">Gravité</Label>
+          <Select value={formData.severity} onValueChange={(value) => handleChange('severity', value)}>
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Sélectionner une gravité" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Faible</SelectItem>
+              <SelectItem value="medium">Moyenne</SelectItem>
+              <SelectItem value="high">Élevée</SelectItem>
+              <SelectItem value="critical">Critique</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="status">État</Label>
+        <Select value={formData.status} onValueChange={(value) => handleChange('status', value)}>
+          <SelectTrigger className="mt-1">
+            <SelectValue placeholder="Sélectionner un état" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">En attente</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="expired">Expirée</SelectItem>
+            <SelectItem value="false">Fausse alerte</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="address">Adresse</Label>
+        <Input
+          id="address"
+          value={formData.location.address}
+          onChange={(e) => handleChange('location.address', e.target.value)}
+          className="mt-1"
+        />
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={() => {}}>
+          Annuler
+        </Button>
+        <Button type="submit" className="bg-red-600 hover:bg-red-700">
+          Mettre à jour
+        </Button>
+      </div>
+    </form>
+  );
+};

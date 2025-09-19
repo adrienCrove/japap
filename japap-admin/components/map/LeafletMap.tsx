@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
 import { Button } from '@/components/ui/button';
 
 // Fix for default markers in React
-delete (L.Icon.Default.prototype as any)._getIconUrl;
+delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: () => string })._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
 interface MapAlert {
   id: string;
   category: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: 'faible' | 'moyen' | 'elevé' | 'critique';
   status: 'active' | 'pending' | 'resolved';
   description: string;
   title: string;
@@ -107,8 +107,9 @@ export default function LeafletMap({
 
     return () => {
       // Clean up zone pulse intervals
-      if (zoneLayersRef.current) {
-        zoneLayersRef.current.eachLayer((layer: any) => {
+      const zoneLayerGroup = zoneLayersRef.current;
+      if (zoneLayerGroup) {
+        zoneLayerGroup.eachLayer((layer: L.Layer & { _pulseInterval?: NodeJS.Timeout }) => {
           if (layer._pulseInterval) {
             clearInterval(layer._pulseInterval);
           }
@@ -122,6 +123,13 @@ export default function LeafletMap({
     };
   }, [center, zoom]);
 
+  // Effet séparé pour mettre à jour le centre et le zoom de la carte
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.setView(center, zoom);
+    }
+  }, [center, zoom]);
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'critical': return '#DC2626';
@@ -132,7 +140,7 @@ export default function LeafletMap({
     }
   };
 
-  const createAlertIcon = (alert: MapAlert, isSelected: boolean = false) => {
+  const createAlertIcon = useCallback((alert: MapAlert, isSelected: boolean = false) => {
     const color = getSeverityColor(alert.severity);
     const size = isSelected ? 40 : 28; // Augmentation de la taille : 20→28, 30→40
     
@@ -152,16 +160,16 @@ export default function LeafletMap({
           color: white;
           font-weight: bold;
         ">
-          ${alert.severity === 'critical' ? '🔥' : 
-            alert.severity === 'high' ? '⚠️' : 
-            alert.severity === 'medium' ? '⚡' : '📍'}
+          ${alert.severity === 'critique' ? '🔥' : 
+            alert.severity === 'elevé' ? '⚠️' : 
+            alert.severity === 'moyen' ? '⚡' : '📍'}
         </div>
       `,
       className: 'custom-alert-icon',
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2]
     });
-  };
+  }, []);
   
   // Heatmap Layer
   useEffect(() => {
@@ -175,7 +183,7 @@ export default function LeafletMap({
 
     // Add the new layer if conditions are met
     if (layers.heatmap && heatmapData.length > 0) {
-      heatLayerRef.current = (L as any).heatLayer(heatmapData, { 
+      heatLayerRef.current = (L as typeof L & { heatLayer: (data: HeatmapPoint[], options: { radius: number; blur: number; maxZoom: number }) => L.HeatLayer }).heatLayer(heatmapData, { 
         radius: 25,
         blur: 15,
         maxZoom: 18,
@@ -219,13 +227,13 @@ export default function LeafletMap({
         alertMarkersRef.current.addLayer(marker);
       });
     }
-  }, [alerts, layers.activeAlerts, layers.recentAlerts, selectedAlert, onAlertSelect]);
+  }, [alerts, layers.activeAlerts, layers.recentAlerts, selectedAlert, onAlertSelect, createAlertIcon]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !onZoneSelect) return;
     
     // Clean up existing intervals before clearing layers
-    zoneLayersRef.current.eachLayer((layer: any) => {
+    zoneLayersRef.current.eachLayer((layer: L.Layer & { _pulseInterval?: NodeJS.Timeout }) => {
       if (layer._pulseInterval) {
         clearInterval(layer._pulseInterval);
       }
@@ -299,7 +307,7 @@ export default function LeafletMap({
               // Start pulsing animation with slight delay for each zone
               const pulseInterval = setInterval(pulseAnimation, 3000);
               // Store interval reference for cleanup
-              (layer as any)._pulseInterval = pulseInterval;
+              (layer as L.Layer & { _pulseInterval?: NodeJS.Timeout })._pulseInterval = pulseInterval;
             }
           }, index * 500); // Stagger the animations
         }

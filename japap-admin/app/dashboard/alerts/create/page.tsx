@@ -29,21 +29,8 @@ import {
 import Breadcrumb from '@/components/layout/Breadcrumb';
 import { createManualAlert } from '@/lib/api';
 
-// Types de catégories et leurs préfixes de référence
-const INCIDENT_CATEGORIES = {
-  'Accident de circulation': 'ACC',
-  'Agression': 'ASS',
-  'Vol': 'TH',
-  'Cambriolage': 'BRG',
-  'Disparition': 'DIS',
-  'Catastrophe naturelle': 'NAT',
-  'Incendie': 'FIR',
-  'Panne ou coupure': 'OUT',
-  'Manifestation': 'MAN',
-  'Animal dangereux': 'ANI',
-  'Urgence médicale': 'MED',
-  'Autre': 'OTH',
-} as const;
+import { getAllCategories, getCategoryByCode, calculateDynamicSeverity, getEmergencyServices } from '@/lib/enhanced-categories';
+import { getFieldsForCategory } from '@/lib/enhanced-category-fields';
 
 interface MediaFile {
   file: File;
@@ -319,106 +306,22 @@ useEffect(() => {
 
 
 
-  // Initialiser les champs spécifiques selon la catégorie
-  const initializeCategoryFields = (category: string): CategorySpecificFields => {
-    switch (category) {
-      case 'Accident de circulation':
-        return {
-          vehicleType: '',
-          vehicleCount: 1,
-          casualties: '',
-          roadBlocked: false
-        } as AccidentFields;
-      
-      case 'Agression':
-      case 'Vol':
-      case 'Cambriolage':
-        return {
-          aggressionType: '',
-          weaponInvolved: false,
-          weaponType: '',
-          suspectsFled: false,
-          suspectDescription: ''
-        } as AggressionFields;
-      
-      case 'Disparition':
-        return {
-          fullName: '',
-          approximateAge: 0,
-          gender: '',
-          lastKnownLocation: '',
-          physicalDescription: '',
-          clothingDescription: '',
-          recentPhoto: ''
-        } as DisparitionFields;
-      
-      case 'Catastrophe naturelle':
-        return {
-          catastropheType: '',
-          damageExtent: '',
-          affectedZones: '',
-          needsEvacuation: false,
-          evacuationEstimate: ''
-        } as CatastropheFields;
-      
-      case 'Incendie':
-        return {
-          fireType: '',
-          suspectedSource: '',
-          spreadRisk: false,
-          emergencyServicesInformed: false
-        } as IncendieFields;
-      
-      case 'Panne ou coupure':
-        return {
-          outageType: '',
-          affectedArea: '',
-          startTime: '',
-          estimatedDuration: ''
-        } as PanneFields;
-      
-      case 'Manifestation':
-        return {
-          manifestationType: '',
-          participantCount: '',
-          lawEnforcementPresent: false,
-          identifiedRisks: ''
-        } as ManifestationFields;
-      
-      case 'Animal dangereux':
-        return {
-          animalType: '',
-          animalDescription: '',
-          dangerPresumption: false,
-          currentLocation: ''
-        } as AnimalFields;
-      
-      case 'Urgence médicale':
-        return {
-          emergencyType: '',
-          victimCount: 1,
-          victimCondition: '',
-          medicalServicesContacted: false
-        } as UrgenceFields;
-      
-      case 'Autre':
-        return {
-          customType: '',
-          specificDetails: ''
-        } as AutreFields;
-      
-      default:
-        return null;
-    }
+  // Initialiser les champs spécifiques selon la catégorie avec nouveau système
+  const initializeCategoryFields = (categoryCode: string): CategorySpecificFields => {
+    return getFieldsForCategory(categoryCode);
   };
 
-  // Gérer le changement de catégorie
-  const handleCategoryChange = (category: string) => {
-    setFormData(prev => ({
-      ...prev,
-      category,
-      categorySpecificFields: initializeCategoryFields(category)
-    }));
+  // Gérer le changement de catégorie avec nouveau système
+  const handleCategoryChange = (categoryCode: string) => {
+    const categoryDef = getCategoryByCode(categoryCode);
+    if (categoryDef) {
+      setFormData(prev => ({
+        ...prev,
+        category: categoryDef.name,
+        severity: categoryDef.defaultSeverity,
+        categorySpecificFields: initializeCategoryFields(categoryCode)
+      }));
+    }
   };
 
   // Mettre à jour les champs spécifiques
@@ -1141,14 +1044,81 @@ useEffect(() => {
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Sélectionner une catégorie" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(INCIDENT_CATEGORIES).map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                  <SelectContent className="max-h-80 overflow-y-auto">
+                    {/* Urgences Vitales */}
+                    <div className="px-2 py-1 text-xs font-semibold text-red-600 bg-red-50">🔴 URGENCES VITALES</div>
+                    {getAllCategories().filter(cat => cat.priority === 'critical').map((category) => (
+                      <SelectItem key={category.code} value={category.code} className="text-red-700">
+                        <div className="flex items-center space-x-2">
+                          <span>{category.icon}</span>
+                          <span>{category.name}</span>
+                          <span className="text-xs text-gray-500">({category.code})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    
+                    {/* Urgences Sécuritaires */}
+                    <div className="px-2 py-1 text-xs font-semibold text-orange-600 bg-orange-50 mt-2">🟠 URGENCES SÉCURITAIRES</div>
+                    {getAllCategories().filter(cat => cat.priority === 'high').map((category) => (
+                      <SelectItem key={category.code} value={category.code} className="text-orange-700">
+                        <div className="flex items-center space-x-2">
+                          <span>{category.icon}</span>
+                          <span>{category.name}</span>
+                          <span className="text-xs text-gray-500">({category.code})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    
+                    {/* Alertes Communautaires */}
+                    <div className="px-2 py-1 text-xs font-semibold text-yellow-600 bg-yellow-50 mt-2">🟡 ALERTES COMMUNAUTAIRES</div>
+                    {getAllCategories().filter(cat => cat.priority === 'medium').map((category) => (
+                      <SelectItem key={category.code} value={category.code} className="text-yellow-700">
+                        <div className="flex items-center space-x-2">
+                          <span>{category.icon}</span>
+                          <span>{category.name}</span>
+                          <span className="text-xs text-gray-500">({category.code})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                    
+                    {/* Informations Publiques */}
+                    <div className="px-2 py-1 text-xs font-semibold text-green-600 bg-green-50 mt-2">🟢 INFORMATIONS PUBLIQUES</div>
+                    {getAllCategories().filter(cat => cat.priority === 'low').map((category) => (
+                      <SelectItem key={category.code} value={category.code} className="text-green-700">
+                        <div className="flex items-center space-x-2">
+                          <span>{category.icon}</span>
+                          <span>{category.name}</span>
+                          <span className="text-xs text-gray-500">({category.code})</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {/* Informations sur la catégorie sélectionnée */}
+                {formData.category && (() => {
+                  const selectedCategory = getAllCategories().find(cat => cat.name === formData.category);
+                  return selectedCategory ? (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-medium" style={{color: selectedCategory.color}}>
+                          {selectedCategory.icon} {selectedCategory.name}
+                        </span>
+                        <span className="text-xs bg-gray-200 px-2 py-1 rounded">{selectedCategory.code}</span>
+                      </div>
+                      <p className="text-gray-600 text-xs">{selectedCategory.description}</p>
+                      <p className="text-xs mt-1">
+                        <span className="font-medium">Temps d&apos;intervention:</span> {selectedCategory.responseTime} min
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedCategory.emergencyServices.map(service => (
+                          <span key={service} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </div>
                 <div>
                   <Label htmlFor="severity">Niveau de gravité *</Label>
