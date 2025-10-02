@@ -7,6 +7,9 @@ const port = process.env.PORT || 4000;
 
 // Importer les routes
 const alertRoutes = require('./routes/alerts');
+const uploadRoutes = require('./routes/uploadImg');
+const userRoutes = require('./routes/users');
+
 // Si vous avez d'autres routes, importez-les ici
 // const authRoutes = require('./routes/authRoutes');
 
@@ -16,6 +19,9 @@ app.use(express.json());
 
 // Routes
 app.use('/api/alerts', alertRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/users', userRoutes);
+
 // app.use('/api/auth', authRoutes);
 
 

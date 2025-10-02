@@ -52,35 +52,77 @@ exports.createAlert = async (req, res) => {
 // GET /api/alerts
 exports.getAllAlerts = async (req, res) => {
     try {
+        const {
+            search = '',
+            page = 1,
+            limit = 10,
+            category,
+            severity,
+            status
+        } = req.query;
+
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+
+        // Construction des filtres
+        const where = {};
+
+        // Filtre de recherche
+        if (search) {
+            where.OR = [
+                { title: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } },
+                { ref_alert_id: { contains: search, mode: 'insensitive' } },
+                { displayTitle: { contains: search, mode: 'insensitive' } }
+            ];
+        }
+
+        // Filtres spécifiques
+        if (category) where.category = category;
+        if (severity) where.severity = severity;
+        if (status) where.status = status;
+
+        // Compter le total d'alertes avec les filtres
+        const total = await prisma.alert.count({ where });
+
+        // Récupérer les alertes avec pagination et filtres
         const alerts = await prisma.alert.findMany({
+            where,
             include: {
                 user: true // Inclure les informations de l'utilisateur
             },
             orderBy: {
                 createdAt: 'desc',
-            }
+            },
+            skip,
+            take: limitNum
         });
-        
+
+        const totalPages = Math.ceil(total / limitNum);
+
         // Format compatible avec le frontend
         const response = {
             success: true,
             data: {
                 alerts: alerts,
                 pagination: {
-                    total: alerts.length,
-                    page: 1,
-                    limit: alerts.length,
-                    totalPages: 1
+                    total,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages,
+                    hasNext: pageNum < totalPages,
+                    hasPrev: pageNum > 1
                 }
             }
         };
-        
+
         res.status(200).json(response);
     } catch (error) {
         console.error('Erreur lors de la récupération des alertes:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Une erreur est survenue lors de la récupération des alertes.' 
+        res.status(500).json({
+            success: false,
+            error: 'Une erreur est survenue lors de la récupération des alertes.'
         });
     }
 }
