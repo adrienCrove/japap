@@ -1,272 +1,381 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { fetchUsers, updateUserStatus, updateUserRole, updateUser, fetchUserDetails } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
   SheetFooter,
   SheetClose,
 } from "@/components/ui/sheet";
-import { 
+import {
   User,
   Users,
   Star,
   Phone,
-  MapPin,
   Clock,
-  AlertTriangle,
   Shield,
-  Ban,
-  MessageSquare,
   Download,
   Filter,
   Search,
   TrendingUp,
-  Eye,
   Edit,
   MoreHorizontal,
-  UserCheck,
-  UserX,
+  UserPlus,
+  LayoutGrid,
+  Table as TableIcon,
+  Loader2,
+  Eye,
+  EyeOff,
+  Trash2,
+  Archive,
+  CheckCircle,
+  X,
+  Mail,
   Calendar,
+  MapPin,
   Activity,
-  Smartphone,
-  Info
+  Info,
+  Key,
+  Copy,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Flag
 } from 'lucide-react';
+import Breadcrumb from '@/components/layout/Breadcrumb';
+import { DataTable } from './data-table';
+import { createColumns, UserAccount } from './columns';
 
-interface UserAccount {
-  id: string;
-  phone: string;
-  name?: string;
-  gender?: string;
-  role: 'user' | 'moderator' | 'admin';
-  reputationScore: number;
-  status: 'active' | 'blocked' | 'suspended';
-  location?: {
-    city: string;
-    coordinates: [number, number];
-  };
-  stats: {
-    alertsSubmitted: number;
-    alertsConfirmed: number;
-    alertsRejected: number;
-    validationRate: number; // pourcentage d'alertes validées
-  };
-  devices: {
-    platform: string;
-    lastActive: string;
-    pushToken?: string;
-  }[];
-  accountAge: string;
-  lastActivity: string;
-  createdAt: string;
-  notes: string[];
-  restrictions?: {
-    type: 'rate_limit' | 'category_ban' | 'full_ban';
-    until?: string;
-    reason: string;
-  };
-}
+type ViewMode = 'kanban' | 'table';
 
 export default function UsersPage() {
+  const router = useRouter();
   const [users, setUsers] = useState<UserAccount[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<UserAccount[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     role: 'all',
-    status: 'all',
-    reputation: 'all',
-    activity: 'all'
+    status: 'all'
   });
 
-  useEffect(() => {
-    // Simuler le chargement des données
-    setTimeout(() => {
-      const mockUsers: UserAccount[] = [
-        {
-          id: 'user-123',
-          phone: '+33 6 12 34 56 78',
-          name: 'Marie Dupont',
-          gender: 'female',
-          role: 'user',
-          reputationScore: 85,
-          status: 'active',
-          location: {
-            city: 'Paris 8e',
-            coordinates: [48.8698, 2.3076]
-          },
-          stats: {
-            alertsSubmitted: 12,
-            alertsConfirmed: 10,
-            alertsRejected: 2,
-            validationRate: 83.3
-          },
-          devices: [
-            {
-              platform: 'iOS',
-              lastActive: '2025-01-04T10:30:00Z',
-              pushToken: 'ios_token_123'
-            }
-          ],
-          accountAge: '2 ans',
-          lastActivity: '2025-01-04T10:30:00Z',
-          createdAt: '2023-01-04T10:30:00Z',
-          notes: [
-            'Utilisateur fiable avec historique consistant',
-            'Signalements toujours géolocalisés correctement'
-          ]
-        },
-        {
-          id: 'user-456',
-          phone: '+33 6 98 76 54 32',
-          name: 'Jean Martin',
-          role: 'moderator',
-          reputationScore: 95,
-          status: 'active',
-          location: {
-            city: 'Lyon',
-            coordinates: [45.7640, 4.8357]
-          },
-          stats: {
-            alertsSubmitted: 45,
-            alertsConfirmed: 42,
-            alertsRejected: 3,
-            validationRate: 93.3
-          },
-          devices: [
-            {
-              platform: 'Android',
-              lastActive: '2025-01-04T09:15:00Z',
-              pushToken: 'android_token_456'
-            }
-          ],
-          accountAge: '3 ans',
-          lastActivity: '2025-01-04T09:15:00Z',
-          createdAt: '2022-01-04T10:30:00Z',
-          notes: [
-            'Promu modérateur en juin 2024',
-            'Excellent taux de validation'
-          ]
-        },
-        {
-          id: 'user-789',
-          phone: '+33 6 11 22 33 44',
-          name: 'Sophie Laurent',
-          role: 'user',
-          reputationScore: 45,
-          status: 'suspended',
-          location: {
-            city: 'Marseille',
-            coordinates: [43.2965, 5.3698]
-          },
-          stats: {
-            alertsSubmitted: 8,
-            alertsConfirmed: 3,
-            alertsRejected: 5,
-            validationRate: 37.5
-          },
-          devices: [
-            {
-              platform: 'Android',
-              lastActive: '2025-01-03T14:20:00Z'
-            }
-          ],
-          accountAge: '6 mois',
-          lastActivity: '2025-01-03T14:20:00Z',
-          createdAt: '2024-07-04T10:30:00Z',
-          restrictions: {
-            type: 'rate_limit',
-            until: '2025-01-11T00:00:00Z',
-            reason: 'Trop de fausses alertes signalées'
-          },
-          notes: [
-            'Suspension temporaire pour fausses alertes répétées',
-            'À surveiller lors de la réactivation'
-          ]
-        },
-        {
-          id: 'user-999',
-          phone: '+33 6 00 00 00 00',
-          role: 'user',
-          reputationScore: 15,
-          status: 'blocked',
-          stats: {
-            alertsSubmitted: 1,
-            alertsConfirmed: 0,
-            alertsRejected: 1,
-            validationRate: 0
-          },
-          devices: [
-            {
-              platform: 'iOS',
-              lastActive: '2025-01-04T09:00:00Z'
-            }
-          ],
-          accountAge: '1 jour',
-          lastActivity: '2025-01-04T09:00:00Z',
-          createdAt: '2025-01-03T10:30:00Z',
-          restrictions: {
-            type: 'full_ban',
-            reason: 'Compte suspect - activité frauduleuse détectée'
-          },
-          notes: [
-            'Compte bloqué définitivement',
-            'Création de compte suspecte',
-            'Première alerte immédiatement identifiée comme fausse'
-          ]
-        }
-      ];
-      
-      setUsers(mockUsers);
-      setFilteredUsers(mockUsers);
-      setLoading(false);
-    }, 1000);
-  }, []);
+  // États pour les dialogues et sheets
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [viewSheetOpen, setViewSheetOpen] = useState(false);
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<UserAccount | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
+  const [newStatus, setNewStatus] = useState<string>('');
+  const [newRole, setNewRole] = useState<string>('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState<string>('');
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [passwordStrength, setPasswordStrength] = useState<number>(0);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [userDetailsData, setUserDetailsData] = useState<any>(null);
+  const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
 
-  useEffect(() => {
-    let filtered = users.filter(user => {
-      if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        if (!user.phone.includes(searchTerm) && 
-            !user.name?.toLowerCase().includes(searchLower) &&
-            !user.id.toLowerCase().includes(searchLower)) {
-          return false;
-        }
-      }
-      if (filters.role !== 'all' && user.role !== filters.role) return false;
-      if (filters.status !== 'all' && user.status !== filters.status) return false;
-      if (filters.reputation !== 'all') {
-        if (filters.reputation === 'high' && user.reputationScore < 80) return false;
-        if (filters.reputation === 'medium' && (user.reputationScore < 50 || user.reputationScore >= 80)) return false;
-        if (filters.reputation === 'low' && user.reputationScore >= 50) return false;
-      }
-      if (filters.activity !== 'all') {
-        const lastActivity = new Date(user.lastActivity);
-        const now = new Date();
-        const diffHours = (now.getTime() - lastActivity.getTime()) / (1000 * 60 * 60);
-        
-        if (filters.activity === 'recent' && diffHours > 24) return false;
-        if (filters.activity === 'week' && diffHours > 168) return false;
-        if (filters.activity === 'inactive' && diffHours <= 168) return false;
-      }
-      return true;
+  // Fonction pour gérer la mise à jour d'un utilisateur
+  const handleUpdateUser = async () => {
+    if (!userToEdit) return;
+
+    const promise = updateUser(userToEdit.id, {
+      name: userToEdit.name,
+      email: userToEdit.email,
+      role: userToEdit.role,
+      status: userToEdit.status,
     });
-    setFilteredUsers(filtered);
-  }, [users, searchTerm, filters]);
+
+    toast.promise(promise, {
+      loading: 'Mise à jour en cours...',
+      success: (res) => {
+        if (res.success) {
+          // Mise à jour dans la liste locale
+          setUsers(prev => prev.map(u =>
+            u.id === userToEdit.id ? userToEdit : u
+          ));
+          setEditSheetOpen(false);
+          return res.message || 'Utilisateur mis à jour avec succès';
+        }
+        throw new Error(res.error || 'Erreur lors de la mise à jour');
+      },
+      error: (err) => err.message || 'Erreur lors de la mise à jour',
+    });
+  };
+
+  // Chargement des utilisateurs depuis l'API
+  useEffect(() => {
+    loadUsers();
+  }, [filters]);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const response = await fetchUsers({
+        role: filters.role !== 'all' ? filters.role : undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
+        search: searchTerm || undefined
+      });
+
+      if (response.success && response.data) {
+        const mappedUsers: UserAccount[] = response.data.map((user: any) => ({
+          id: user.id,
+          name: user.name,
+          phone: user.phone,
+          email: user.email,
+          role: user.role,
+          status: user.status,
+          reputationScore: user.reputationScore || 100,
+          createdAt: user.createdAt
+        }));
+        setUsers(mappedUsers);
+      } else {
+        setUsers(getMockUsers());
+        toast.error('Impossible de charger les utilisateurs', {
+          description: 'Affichage des données de démonstration'
+        });
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setUsers(getMockUsers());
+      toast.error('Erreur de connexion à l\'API');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewUser = async (user: UserAccount) => {
+    setSelectedUser(user);
+    setViewSheetOpen(true);
+    setLoadingDetails(true);
+
+    // Créer un timeout pour l'appel API
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 secondes timeout
+
+    try {
+      const response = await Promise.race([
+        fetchUserDetails(user.id),
+        new Promise<any>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 3000)
+        )
+      ]);
+
+      clearTimeout(timeoutId);
+
+      if (response.success && response.data) {
+        setUserDetailsData(response.data);
+      } else {
+        // Utiliser des données mock si l'API échoue
+        setUserDetailsData(getMockUserDetails(user));
+        toast.info('Données de démonstration affichées');
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('Error fetching user details:', error);
+      setUserDetailsData(getMockUserDetails(user));
+
+      if (error instanceof Error && error.message === 'Timeout') {
+        toast.warning('API non disponible, affichage des données de démonstration');
+      } else {
+        toast.info('Données de démonstration affichées');
+      }
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const handleEditUser = (user: UserAccount) => {
+    setUserToEdit(user);
+    setEditSheetOpen(true);
+  };
+
+  const handleDeleteUser = (user: UserAccount) => {
+    setUserToEdit(user);
+    setDeleteConfirmation('');
+    setDeleteDialogOpen(true);
+  };
+
+  const handleArchiveUser = async (user: UserAccount) => {
+    toast.success(`Utilisateur ${user.name || user.phone} archivé`);
+    // TODO: Implémenter l'archivage via API
+  };
+
+  const confirmDelete = async () => {
+    if (deleteConfirmation !== 'DELETE' || !userToEdit) {
+      toast.error('Veuillez taper DELETE pour confirmer');
+      return;
+    }
+
+    try {
+      setUsers(prev => prev.filter(u => u.id !== userToEdit.id));
+      toast.success(`Utilisateur ${userToEdit.name || userToEdit.phone} supprimé`);
+      setDeleteDialogOpen(false);
+      setUserToEdit(null);
+      setDeleteConfirmation('');
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUsers(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUsers.length === filteredUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filteredUsers.map(u => u.id));
+    }
+  };
+
+  const handleBulkAction = (action: 'delete' | 'archive' | 'activate' | 'suspend') => {
+    const count = selectedUsers.length;
+    toast.success(`Action "${action}" appliquée à ${count} utilisateur(s)`);
+    setSelectedUsers([]);
+  };
+
+  const handleChangeStatus = (user: UserAccount) => {
+    setUserToEdit(user);
+    setNewStatus(user.status);
+    setStatusDialogOpen(true);
+  };
+
+  const handleChangeRole = (user: UserAccount) => {
+    setUserToEdit(user);
+    setNewRole(user.role);
+    setRoleDialogOpen(true);
+  };
+
+  const handleManagePassword = (user: UserAccount) => {
+    setUserToEdit(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordStrength(0);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setPasswordDialogOpen(true);
+  };
+
+  const generatePassword = () => {
+    const length = 16;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?";
+    let password = "";
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    setNewPassword(password);
+    setConfirmPassword(password);
+    calculatePasswordStrength(password);
+  };
+
+  const calculatePasswordStrength = (password: string) => {
+    let strength = 0;
+    if (password.length >= 8) strength += 25;
+    if (password.length >= 12) strength += 25;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
+    if (/[0-9]/.test(password)) strength += 12.5;
+    if (/[^a-zA-Z0-9]/.test(password)) strength += 12.5;
+    setPasswordStrength(Math.min(100, strength));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Mot de passe copié dans le presse-papier');
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!userToEdit) return;
+    if (newPassword !== confirmPassword) {
+      toast.error('Les mots de passe ne correspondent pas');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('Le mot de passe doit contenir au moins 8 caractères');
+      return;
+    }
+
+    toast.success(`Mot de passe mis à jour pour ${userToEdit.name || userToEdit.phone}`);
+    setPasswordDialogOpen(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    // TODO: Implémenter l'appel API pour changer le mot de passe
+  };
+
+  const handleUpdateStatus = async () => {
+    if (!userToEdit) return;
+
+    const promise = updateUserStatus(userToEdit.id, newStatus);
+
+    toast.promise(promise, {
+      loading: 'Mise à jour du statut...',
+      success: (res) => {
+        setUsers(prev => prev.map(u =>
+          u.id === userToEdit.id ? { ...u, status: newStatus as any } : u
+        ));
+        setStatusDialogOpen(false);
+        return res.message || 'Statut mis à jour avec succès';
+      },
+      error: (err) => `Erreur : ${err.toString()}`,
+    });
+  };
+
+  const handleUpdateRole = async () => {
+    if (!userToEdit) return;
+
+    const promise = updateUserRole(userToEdit.id, newRole);
+
+    toast.promise(promise, {
+      loading: 'Mise à jour du rôle...',
+      success: (res) => {
+        setUsers(prev => prev.map(u =>
+          u.id === userToEdit.id ? { ...u, role: newRole as any } : u
+        ));
+        setRoleDialogOpen(false);
+        return res.message || 'Rôle mis à jour avec succès';
+      },
+      error: (err) => `Erreur : ${err.toString()}`,
+    });
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
-      case 'suspended': return 'bg-yellow-100 text-yellow-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'suspended': return 'bg-orange-100 text-orange-800';
       case 'blocked': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -281,128 +390,481 @@ export default function UsersPage() {
     }
   };
 
-  const getReputationColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 50) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    if (diffHours > 24) {
-      const diffDays = Math.floor(diffHours / 24);
-      return `Il y a ${diffDays}j`;
-    } else if (diffHours > 0) {
-      return `Il y a ${diffHours}h`;
-    } else {
-      return `Il y a ${diffMinutes}min`;
-    }
-  };
-
-  const handleUserAction = (action: string, userId: string) => {
-    console.log(`Action ${action} sur utilisateur ${userId}`);
-  };
-
-  if (loading) {
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-      </div>
+      user.name?.toLowerCase().includes(search) ||
+      user.phone.toLowerCase().includes(search) ||
+      user.email?.toLowerCase().includes(search)
     );
-  }
+  });
+
+  const columns = createColumns({
+    onViewUser: handleViewUser,
+    onEditUser: handleEditUser,
+    onChangeStatus: handleChangeStatus,
+    onChangeRole: handleChangeRole,
+    onManagePassword: handleManagePassword,
+    onArchiveUser: handleArchiveUser,
+    onDeleteUser: handleDeleteUser,
+    selectedUsers,
+    onSelectUser: handleSelectUser,
+  });
 
   return (
-    <>
-      <div className="space-y-6">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Utilisateurs</h1>
-            <p className="text-gray-600 mt-2">
-              Gestion des comptes et système de réputation
-            </p>
-          </div>
-          <div className="flex space-x-3">
-            <Button variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-            <Button className="bg-red-600 hover:bg-red-700">
-              <UserCheck className="h-4 w-4 mr-2" />
-              Nouveau modérateur
-            </Button>
-          </div>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <Breadcrumb />
+          <h1 className="text-3xl font-bold text-gray-900">Utilisateurs</h1>
+          <p className="text-gray-600 mt-2">
+            Gestion des comptes utilisateurs et modérateurs
+          </p>
         </div>
+        <Button className="bg-red-600 hover:bg-red-700" asChild>
+          <a href="/dashboard/users/create">
+            <UserPlus className="h-4 w-4 mr-2" />
+            Créer un utilisateur
+          </a>
+        </Button>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Utilisateurs</CardTitle>
-              <Users className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.length}</div>
-              <p className="text-xs text-muted-foreground">+12 cette semaine</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Actifs</CardTitle>
-              <Activity className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.filter(u => u.status === 'active').length}</div>
-              <p className="text-xs text-muted-foreground">{Math.round((users.filter(u => u.status === 'active').length / users.length) * 100)}% du total</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Modérateurs</CardTitle>
-              <Shield className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{users.filter(u => u.role === 'moderator').length}</div>
-              <p className="text-xs text-muted-foreground">En ligne actuellement</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Score Moyen</CardTitle>
-              <Star className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{Math.round(users.reduce((acc, u) => acc + u.reputationScore, 0) / users.length)}</div>
-              <p className="text-xs text-muted-foreground">Réputation globale</p>
-            </CardContent>
-          </Card>
-        </div>
-
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Filter className="h-5 w-5" />
-              <span>Filtres et Recherche</span>
-            </CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">Total utilisateurs</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="md:col-span-1">
-                <label className="text-sm font-medium text-gray-700">Recherche</label>
-                <div className="relative mt-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input type="text" placeholder="Nom, téléphone, ID..." className="pl-10 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-gray-400" />
+              <span className="text-2xl font-bold">{users.length}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">Utilisateurs actifs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <User className="h-5 w-5 text-green-500" />
+              <span className="text-2xl font-bold">{users.filter(u => u.status === 'active').length}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">Modérateurs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <Shield className="h-5 w-5 text-blue-500" />
+              <span className="text-2xl font-bold">{users.filter(u => u.role === 'moderator' || u.role === 'admin').length}</span>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-gray-600">Score moyen</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <Star className="h-5 w-5 text-yellow-500" />
+              <span className="text-2xl font-bold">
+                {users.length > 0 ? Math.round(users.reduce((acc, u) => acc + u.reputationScore, 0) / users.length) : 0}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Barre d'actions groupées */}
+      {selectedUsers.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedUsers.length} utilisateur(s) sélectionné(s)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelectedUsers([])}
+                  className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                >
+                  Tout désélectionner
+                </Button>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction('activate')}
+                  className="border-green-300 text-green-700 hover:bg-green-100"
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Activer
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction('suspend')}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Suspendre
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction('archive')}
+                  className="border-gray-300 text-gray-700 hover:bg-gray-100"
+                >
+                  <Archive className="h-4 w-4 mr-1" />
+                  Archiver
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkAction('delete')}
+                  className="border-red-300 text-red-700 hover:bg-red-100"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Supprimer
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters & View Toggle */}
+      <Card>
+        <CardContent>
+        <div className="flex flex-row items-center justify-between">
+          <div className="flex flex-row gap-4">
+            <div>
+              <Label>Rechercher</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Nom, téléphone, email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Rôle</Label>
+              <Select value={filters.role} onValueChange={(value) => setFilters(prev => ({ ...prev, role: value }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les rôles</SelectItem>
+                  <SelectItem value="user">Utilisateur</SelectItem>
+                  <SelectItem value="moderator">Modérateur</SelectItem>
+                  <SelectItem value="admin">Administrateur</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Statut</Label>
+              <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les statuts</SelectItem>
+                  <SelectItem value="active">Actif</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="suspended">Suspendu</SelectItem>
+                  <SelectItem value="blocked">Bloqué</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-row gap-2">
+              <Button
+                variant={viewMode === 'kanban' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('kanban')}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Grille
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('table')}
+              >
+                <TableIcon className="h-4 w-4 mr-2" />
+                Tableau
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Vue Kanban ou Tableau */}
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+        </div>
+      ) : viewMode === 'table' ? (
+        <Card>
+          <CardContent className="pt-6">
+            <DataTable columns={columns} data={filteredUsers} />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {filteredUsers.map((user) => (
+            <Card key={user.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Checkbox
+                        checked={selectedUsers.includes(user.id)}
+                        onCheckedChange={() => handleSelectUser(user.id)}
+                      />
+                      <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                        <User className="h-6 w-6 text-red-600" />
+                      </div>
+                      <div>
+                        <h3
+                          className="font-semibold text-gray-900 hover:text-red-600 cursor-pointer transition-colors"
+                          onClick={() => handleViewUser(user)}
+                        >
+                          {user.name || 'Sans nom'}
+                        </h3>
+                        <p className="text-sm text-gray-500 flex items-center">
+                          <Phone className="h-3 w-3 mr-1" />
+                          {user.phone}
+                        </p>
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="ghost">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                          <Edit className="h-4 w-4 mr-2" />
+                          Éditer
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeStatus(user)}>
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          Changer le statut
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeRole(user)}>
+                          <Shield className="h-4 w-4 mr-2" />
+                          Changer le rôle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleManagePassword(user)}>
+                          <Key className="h-4 w-4 mr-2" />
+                          Gérer mot de passe
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleArchiveUser(user)}>
+                          <Archive className="h-4 w-4 mr-2" />
+                          Archiver
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="text-red-600">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className={getRoleColor(user.role)}>
+                      {user.role === 'admin' ? 'Administrateur' : user.role === 'moderator' ? 'Modérateur' : 'Utilisateur'}
+                    </Badge>
+                    <Badge className={getStatusColor(user.status)}>
+                      {user.status === 'active' ? 'Actif' : user.status === 'pending' ? 'En attente' : user.status === 'suspended' ? 'Suspendu' : 'Bloqué'}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex items-center space-x-1">
+                      <Star className="h-4 w-4 text-yellow-500" />
+                      <span className="text-sm font-semibold">{user.reputationScore}</span>
+                      <span className="text-xs text-gray-500">pts</span>
+                    </div>
+                    <div className="flex items-center space-x-1 text-xs text-gray-500">
+                      <Clock className="h-3 w-3" />
+                      <span>{new Date(user.createdAt).toLocaleDateString('fr-FR')}</span>
+                    </div>
+                  </div>
+
+                  {user.email && (
+                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                  )}
                 </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog pour voir les détails */}
+      <Dialog open={viewSheetOpen} onOpenChange={setViewSheetOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Profil utilisateur</DialogTitle>
+            <DialogDescription>
+              Informations détaillées sur {selectedUser?.name || selectedUser?.phone}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedUser && (
+            <div className="space-y-6 py-4">
+              {/* Informations de base */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Informations générales</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2  gap-4">
+                    <div>
+                      <Label className="text-gray-500">Nom</Label>
+                      <p className="font-medium mt-1">{selectedUser.name || 'Non défini'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">Téléphone</Label>
+                      <p className="font-medium mt-1">{selectedUser.phone}</p>
+                    </div>
+                    {selectedUser.email && (
+                      <div>
+                        <Label className="text-gray-500">Email</Label>
+                        <p className="font-medium mt-1">{selectedUser.email}</p>
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-gray-500">Rôle</Label>
+                      <div className="mt-1">
+                        <Badge className={getRoleColor(selectedUser.role)}>
+                          {selectedUser.role === 'admin' ? 'Administrateur' : selectedUser.role === 'moderator' ? 'Modérateur' : 'Utilisateur'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">Statut</Label>
+                      <div className="mt-1">
+                        <Badge className={getStatusColor(selectedUser.status)}>
+                          {selectedUser.status === 'active' ? 'Actif' : selectedUser.status === 'pending' ? 'En attente' : selectedUser.status === 'suspended' ? 'Suspendu' : 'Bloqué'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">Score de réputation</Label>
+                      <p className="font-semibold text-yellow-600 mt-1">{selectedUser.reputationScore} pts</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-500">Membre depuis</Label>
+                      <p className="font-medium mt-1">{new Date(selectedUser.createdAt).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {loadingDetails ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-red-600" />
+                </div>
+              ) : userDetailsData && (
+                <>
+              
+
+                  {/* Dernières alertes */}
+                  {userDetailsData.alerts && userDetailsData.alerts.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Dernières alertes créées</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          {userDetailsData.alerts.slice(0, 5).map((alert: any) => (
+                            <div key={alert.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                                <div>
+                                  <p className="text-sm font-medium">{alert.category}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(alert.createdAt).toLocaleDateString('fr-FR')}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge className={alert.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                                {alert.status}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewSheetOpen(false)}>
+              Fermer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog pour éditer */}
+      <Dialog open={editSheetOpen} onOpenChange={setEditSheetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier l'utilisateur</DialogTitle>
+            <DialogDescription>
+              Édition de {userToEdit?.name || userToEdit?.phone}
+            </DialogDescription>
+          </DialogHeader>
+          {userToEdit && (
+            <div className="space-y-4 py-4">
+              <div>
+                <Label>Nom</Label>
+                <Input
+                  value={userToEdit.name || ''}
+                  onChange={(e) => setUserToEdit({ ...userToEdit, name: e.target.value })}
+                  className="mt-1"
+                />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Rôle</label>
-                <Select value={filters.role} onValueChange={(value) => setFilters({...filters, role: value})}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Tous les rôles" /></SelectTrigger>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  value={userToEdit.email || ''}
+                  onChange={(e) => setUserToEdit({ ...userToEdit, email: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Rôle</Label>
+                <Select
+                  value={userToEdit.role}
+                  onValueChange={(value: any) => setUserToEdit({ ...userToEdit, role: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les rôles</SelectItem>
                     <SelectItem value="user">Utilisateur</SelectItem>
                     <SelectItem value="moderator">Modérateur</SelectItem>
                     <SelectItem value="admin">Administrateur</SelectItem>
@@ -410,221 +872,339 @@ export default function UsersPage() {
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Statut</label>
-                <Select value={filters.status} onValueChange={(value) => setFilters({...filters, status: value})}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Tous les statuts" /></SelectTrigger>
+                <Label>Statut</Label>
+                <Select
+                  value={userToEdit.status}
+                  onValueChange={(value: any) => setUserToEdit({ ...userToEdit, status: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Tous les statuts</SelectItem>
                     <SelectItem value="active">Actif</SelectItem>
+                    <SelectItem value="pending">En attente</SelectItem>
                     <SelectItem value="suspended">Suspendu</SelectItem>
                     <SelectItem value="blocked">Bloqué</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Réputation</label>
-                <Select value={filters.reputation} onValueChange={(value) => setFilters({...filters, reputation: value})}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Tous les scores" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les scores</SelectItem>
-                    <SelectItem value="high">Élevée (80+)</SelectItem>
-                    <SelectItem value="medium">Moyenne (50-79)</SelectItem>
-                    <SelectItem value="low">Faible (&lt;50)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Activité</label>
-                <Select value={filters.activity} onValueChange={(value) => setFilters({...filters, activity: value})}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Toute activité" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Toute activité</SelectItem>
-                    <SelectItem value="recent">Récente (24h)</SelectItem>
-                    <SelectItem value="week">Cette semaine</SelectItem>
-                    <SelectItem value="inactive">Inactifs (&gt;1 semaine)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditSheetOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleUpdateUser}
+            >
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Utilisateurs ({filteredUsers.length})</CardTitle>
-            <CardDescription>Liste complète avec statistiques et actions de modération</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {filteredUsers.map((user) => (
-                <div key={user.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-3">
-                        <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                          <User className="h-5 w-5 text-gray-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3">
-                            <h3 className="font-semibold text-gray-900">{user.name || 'Utilisateur Anonyme'}</h3>
-                            <Badge className={getRoleColor(user.role)}>{user.role === 'admin' ? 'Admin' : user.role === 'moderator' ? 'Modérateur' : 'Utilisateur'}</Badge>
-                            <Badge className={getStatusColor(user.status)}>{user.status === 'active' ? 'Actif' : user.status === 'suspended' ? 'Suspendu' : 'Bloqué'}</Badge>
-                          </div>
-                          <div className="flex items-center space-x-4 mt-1 text-sm text-gray-600">
-                            <div className="flex items-center space-x-1"><Phone className="h-3 w-3" /><span>{user.phone}</span></div>
-                            <div className="flex items-center space-x-1"><Calendar className="h-3 w-3" /><span>{user.accountAge}</span></div>
-                            {user.location && (<div className="flex items-center space-x-1"><MapPin className="h-3 w-3" /><span>{user.location.city}</span></div>)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                        <div className="text-center">
-                          <div className="flex items-center space-x-1"><Star className="h-4 w-4 text-yellow-500" /><span className={`font-bold ${getReputationColor(user.reputationScore)}`}>{user.reputationScore}</span></div>
-                          <p className="text-xs text-gray-500">Score</p>
-                        </div>
-                        <div className="text-center"><span className="font-bold text-blue-600">{user.stats.alertsSubmitted}</span><p className="text-xs text-gray-500">Signalements</p></div>
-                        <div className="text-center"><span className="font-bold text-green-600">{user.stats.alertsConfirmed}</span><p className="text-xs text-gray-500">Validées</p></div>
-                        <div className="text-center"><span className="font-bold text-red-600">{user.stats.alertsRejected}</span><p className="text-xs text-gray-500">Rejetées</p></div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center space-x-1"><Activity className="h-3 w-3" /><span>Taux validation: {user.stats.validationRate.toFixed(1)}%</span></div>
-                          <div className="flex items-center space-x-1"><Clock className="h-3 w-3" /><span>Dernière activité: {formatTimeAgo(user.lastActivity)}</span></div>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span>{user.devices[0]?.platform}</span>
-                        </div>
-                      </div>
-
-                      {user.restrictions && (
-                        <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                          <div className="flex items-center space-x-2">
-                            <Ban className="h-4 w-4 text-yellow-600" />
-                            <span className="text-sm font-medium text-yellow-800">{user.restrictions.type === 'rate_limit' ? 'Limitation de débit' : user.restrictions.type === 'category_ban' ? 'Restriction catégorie' : 'Blocage complet'}</span>
-                            {user.restrictions.until && (<span className="text-xs text-yellow-600">jusqu'au {new Date(user.restrictions.until).toLocaleDateString('fr-FR')}</span>)}
-                          </div>
-                          <p className="text-xs text-yellow-700 mt-1">{user.restrictions.reason}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedUser(user)}><Eye className="h-4 w-4 mr-1" />Voir</Button>
-                      <Button size="sm" variant="outline"><Edit className="h-4 w-4 mr-1" />Éditer</Button>
-                      <Button size="sm" variant="outline"><MessageSquare className="h-4 w-4 mr-1" />Message</Button>
-                      <Button size="sm" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
+      {/* Dialogue de gestion du mot de passe */}
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gérer le mot de passe</DialogTitle>
+            <DialogDescription>
+              Modifier le mot de passe de {userToEdit?.name || userToEdit?.phone}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="newPassword">Mot de passe</Label>
+              <div className="flex gap-2 mt-1">
+                <div className="relative flex-1">
+                  <Input
+                    id="newPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      calculatePasswordStrength(e.target.value);
+                    }}
+                    placeholder="Entrer le nouveau mot de passe"
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    )}
+                  </Button>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex justify-center mt-6">
-              <div className="flex space-x-2">
-                <Button variant="outline" size="sm">Précédent</Button>
-                <Button variant="outline" size="sm">1</Button>
-                <Button variant="outline" size="sm">2</Button>
-                <Button variant="outline" size="sm">3</Button>
-                <Button variant="outline" size="sm">Suivant</Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  onClick={() => copyToClipboard(newPassword)}
+                  disabled={!newPassword}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-      
-      {selectedUser && (
-          <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-              <SheetContent className="w-[400px] sm:w-[540px]">
-                  <SheetHeader>
-                      <SheetTitle>Détails de l'utilisateur</SheetTitle>
-                      <SheetDescription>
-                          Informations complètes sur {selectedUser.name || 'cet utilisateur'}.
-                      </SheetDescription>
-                  </SheetHeader>
-                  <div className="space-y-4 py-4">
-                      <Card>
-                          <CardHeader>
-                              <CardTitle className="flex items-center space-x-2">
-                                  <User className="h-5 w-5" />
-                                  <span>Informations générales</span>
-                              </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2 text-sm">
-                              <div className="flex justify-between"><span className="text-gray-500">Nom</span> <strong>{selectedUser.name || 'Non défini'}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Téléphone</span> <strong>{selectedUser.phone}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Rôle</span> <Badge className={getRoleColor(selectedUser.role)}>{selectedUser.role}</Badge></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Statut</span> <Badge className={getStatusColor(selectedUser.status)}>{selectedUser.status}</Badge></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Score de réputation</span> <strong className={getReputationColor(selectedUser.reputationScore)}>{selectedUser.reputationScore}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Membre depuis</span> <span>{selectedUser.accountAge}</span></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Dernière activité</span> <span>{formatTimeAgo(selectedUser.lastActivity)}</span></div>
-                              {selectedUser.location && <div className="flex justify-between"><span className="text-gray-500">Localisation</span> <span>{selectedUser.location.city}</span></div>}
-                          </CardContent>
-                      </Card>
 
-                      <Card>
-                          <CardHeader>
-                              <CardTitle className="flex items-center space-x-2">
-                                  <Activity className="h-5 w-5" />
-                                  <span>Statistiques d'activité</span>
-                              </CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2 text-sm">
-                              <div className="flex justify-between"><span className="text-gray-500">Alertes soumises</span> <strong>{selectedUser.stats.alertsSubmitted}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Alertes confirmées</span> <strong className="text-green-600">{selectedUser.stats.alertsConfirmed}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Alertes rejetées</span> <strong className="text-red-600">{selectedUser.stats.alertsRejected}</strong></div>
-                              <div className="flex justify-between"><span className="text-gray-500">Taux de validation</span> <strong>{selectedUser.stats.validationRate.toFixed(1)}%</strong></div>
-                          </CardContent>
-                      </Card>
+            <div>
+              <Label htmlFor="confirmPassword">Confirmation du mot de passe</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirmer le mot de passe"
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-500" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-500" />
+                  )}
+                </Button>
+              </div>
+            </div>
 
-                      {selectedUser.restrictions && (
-                          <Card className="border-yellow-300 bg-yellow-50">
-                              <CardHeader>
-                                  <CardTitle className="flex items-center space-x-2 text-yellow-800">
-                                      <Ban className="h-5 w-5" />
-                                      <span>Restrictions Actives</span>
-                                  </CardTitle>
-                              </CardHeader>
-                              <CardContent className="space-y-2 text-sm text-yellow-900">
-                                  <div className="flex justify-between">
-                                    <span className="text-yellow-700">Type</span> 
-                                    <strong>{selectedUser.restrictions.type === 'rate_limit' ? 'Limitation de débit' : 'Blocage'}</strong>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-yellow-700">Raison</span> 
-                                    <strong>{selectedUser.restrictions.reason}</strong>
-                                  </div>
-                                  {selectedUser.restrictions.until && <div className="flex justify-between"><span className="text-yellow-700">Jusqu'au</span> <strong>{new Date(selectedUser.restrictions.until).toLocaleDateString('fr-FR')}</strong></div>}
-                              </CardContent>
-                          </Card>
-                      )}
+            {newPassword && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Niveau de sécurité</Label>
+                  <span className="text-sm font-medium">
+                    {passwordStrength < 50 ? 'Faible' : passwordStrength < 75 ? 'Moyen' : passwordStrength < 100 ? 'Élevé' : 'Très élevé'} ({passwordStrength}/100)
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      passwordStrength < 50
+                        ? 'bg-red-500'
+                        : passwordStrength < 75
+                        ? 'bg-yellow-500'
+                        : passwordStrength < 100
+                        ? 'bg-blue-500'
+                        : 'bg-green-500'
+                    }`}
+                    style={{ width: `${passwordStrength}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
-                      <Card>
-                          <CardHeader>
-                              <CardTitle className="flex items-center space-x-2">
-                                <Info className="h-5 w-5" />
-                                <span>Notes du modérateur</span>
-                              </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                              <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                                  {selectedUser.notes.map((note, index) => <li key={index}>{note}</li>)}
-                              </ul>
-                          </CardContent>
-                      </Card>
-                  </div>
-                  <SheetFooter>
-                    <Button variant="outline" onClick={() => handleUserAction('suspend', selectedUser.id)}>Suspendre</Button>
-                    <Button variant="destructive" onClick={() => handleUserAction('block', selectedUser.id)}>Bloquer</Button>
-                    <SheetClose asChild>
-                      <Button>Fermer</Button>
-                    </SheetClose>
-                  </SheetFooter>
-              </SheetContent>
-          </Sheet>
-      )}
-    </>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={generatePassword}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Générateur de mots de passe
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleUpdatePassword}
+              disabled={!newPassword || newPassword !== confirmPassword}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue de suppression */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Supprimer l'utilisateur</DialogTitle>
+            <DialogDescription>
+              Cette action est irréversible. Pour confirmer la suppression de{' '}
+              <strong>{userToEdit?.name || userToEdit?.phone}</strong>, veuillez taper{' '}
+              <strong className="text-red-600">DELETE</strong> ci-dessous.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="deleteConfirm">Confirmation</Label>
+              <Input
+                id="deleteConfirm"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                placeholder="Tapez DELETE"
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteConfirmation !== 'DELETE'}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Supprimer définitivement
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue pour changer le statut */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Changer le statut de l'utilisateur</DialogTitle>
+            <DialogDescription>
+              Modifier le statut du compte de {userToEdit?.name || userToEdit?.phone}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="status">Nouveau statut</Label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Sélectionner un statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Actif</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="suspended">Suspendu</SelectItem>
+                  <SelectItem value="blocked">Bloqué</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStatusDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={handleUpdateStatus}>
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue pour changer le rôle */}
+      <Dialog open={roleDialogOpen} onOpenChange={setRoleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Changer le rôle de l'utilisateur</DialogTitle>
+            <DialogDescription>
+              Modifier les permissions de {userToEdit?.name || userToEdit?.phone}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="role">Nouveau rôle</Label>
+              <Select value={newRole} onValueChange={setNewRole}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Sélectionner un rôle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Utilisateur - Accès standard</SelectItem>
+                  <SelectItem value="moderator">Modérateur - Validation des alertes</SelectItem>
+                  <SelectItem value="admin">Administrateur - Accès complet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoleDialogOpen(false)}>
+              Annuler
+            </Button>
+            <Button className="bg-red-600 hover:bg-red-700" onClick={handleUpdateRole}>
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
+}
+
+// Données de démonstration (fallback)
+function getMockUsers(): UserAccount[] {
+  return [
+    {
+      id: 'user-1',
+      name: 'Marie Dupont',
+      phone: '+237 693 12 34 56',
+      email: 'marie.dupont@example.com',
+      role: 'user',
+      status: 'active',
+      reputationScore: 95,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'user-2',
+      name: 'Jean Martin',
+      phone: '+237 675 98 76 54',
+      email: 'jean.martin@example.com',
+      role: 'moderator',
+      status: 'active',
+      reputationScore: 88,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'user-3',
+      name: 'Sophie Bernard',
+      phone: '+237 680 11 22 33',
+      email: null,
+      role: 'user',
+      status: 'pending',
+      reputationScore: 100,
+      createdAt: new Date().toISOString()
+    }
+  ];
+}
+
+function getMockUserDetails(user: UserAccount) {
+  return {
+    _count: {
+      alerts: 12,
+      confirmations: 45,
+    },
+    reports: 2,
+    alerts: [
+      { id: '1', category: 'Accident', status: 'active', createdAt: '2025-09-28' },
+      { id: '2', category: 'Incendie', status: 'expired', createdAt: '2025-09-25' },
+      { id: '3', category: 'Vol', status: 'active', createdAt: '2025-09-20' },
+    ],
+    confirmations: [
+      { id: '1', alertId: 'a1', createdAt: '2025-09-27' },
+      { id: '2', alertId: 'a2', createdAt: '2025-09-26' },
+    ],
+    activityData: [
+      { month: 'Jan', alertes: 4, confirmations: 8 },
+      { month: 'Fév', alertes: 3, confirmations: 12 },
+      { month: 'Mar', alertes: 5, confirmations: 10 },
+      { month: 'Avr', alertes: 2, confirmations: 15 },
+      { month: 'Mai', alertes: 6, confirmations: 18 },
+      { month: 'Juin', alertes: 4, confirmations: 14 },
+    ],
+  };
 }

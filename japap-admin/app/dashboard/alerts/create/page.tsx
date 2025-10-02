@@ -30,7 +30,9 @@ import Breadcrumb from '@/components/layout/Breadcrumb';
 import { createManualAlert } from '@/lib/api';
 
 import { getAllCategories, getCategoryByCode, calculateDynamicSeverity, getEmergencyServices } from '@/lib/enhanced-categories';
-import { getFieldsForCategory } from '@/lib/enhanced-category-fields';
+import { getFieldsForCategory, TrafficAccidentFields, TheftFields, DisappearanceFields, FireFields, MedicalEmergencyFields, InfrastructureFields } from '@/lib/enhanced-category-fields';
+import { generateEnhancedAlertRef, enrichLocationData, calculateConfidenceScore, validateAlertData } from '@/lib/alert-enhancement-utils';
+import type { EnhancedLocation, EnhancedAlertCreationData } from '@/lib/enhanced-alert-types';
 
 interface MediaFile {
   file: File;
@@ -38,102 +40,24 @@ interface MediaFile {
   type: 'image' | 'video' | 'audio';
 }
 
-// Interfaces pour les champs spécifiques par catégorie
-interface AccidentFields {
-  vehicleType: string;
-  vehicleCount: number;
-  casualties: string;
-  roadBlocked: boolean;
-}
-
-interface AggressionFields {
-  aggressionType: string;
-  weaponInvolved: boolean;
-  weaponType?: string;
-  suspectsFled: boolean;
-  suspectDescription?: string;
-}
-
-interface DisparitionFields {
-  fullName: string;
-  approximateAge: number;
-  gender: string;
-  lastKnownLocation: string;
-  physicalDescription: string;
-  clothingDescription: string;
-  recentPhoto?: string;
-}
-
-interface CatastropheFields {
-  catastropheType: string;
-  damageExtent: string;
-  affectedZones: string;
-  needsEvacuation: boolean;
-  evacuationEstimate?: string;
-}
-
-interface IncendieFields {
-  fireType: string;
-  suspectedSource?: string;
-  spreadRisk: boolean;
-  emergencyServicesInformed: boolean;
-}
-
-interface PanneFields {
-  outageType: string;
-  affectedArea: string;
-  startTime: string;
-  estimatedDuration?: string;
-}
-
-interface ManifestationFields {
-  manifestationType: string;
-  participantCount: string;
-  lawEnforcementPresent: boolean;
-  identifiedRisks?: string;
-}
-
-interface AnimalFields {
-  animalType: string;
-  animalDescription: string;
-  dangerPresumption: boolean;
-  currentLocation: string;
-}
-
-interface UrgenceFields {
-  emergencyType: string;
-  victimCount: number;
-  victimCondition: string;
-  medicalServicesContacted: boolean;
-}
-
-interface AutreFields {
-  customType: string;
-  specificDetails: string;
-}
-
-type CategorySpecificFields = 
-  | AccidentFields 
-  | AggressionFields 
-  | DisparitionFields 
-  | CatastropheFields 
-  | IncendieFields 
-  | PanneFields 
-  | ManifestationFields 
-  | AnimalFields 
-  | UrgenceFields 
-  | AutreFields 
+// Utilisation des types enrichis depuis enhanced-category-fields.ts
+type CategorySpecificFields =
+  | TrafficAccidentFields
+  | TheftFields
+  | DisappearanceFields
+  | FireFields
+  | MedicalEmergencyFields
+  | InfrastructureFields
+  | any
   | null;
 
 interface AlertFormData {
   title: string;
-  category: string;
+  categoryCode: string; // Changed from category to categoryCode for clarity
+  category: string; // Keep for display purposes
   severity: 'low' | 'medium' | 'high' | 'critical';
   description: string;
-  location: {
-    address: string;
-    coordinates: [number, number];
-  };
+  location: EnhancedLocation;
   mediaFiles: MediaFile[];
   expiresAt?: string;
   status: 'active' | 'pending';
@@ -157,12 +81,17 @@ export default function CreateAlertPage() {
   const [googleMapsLoaded, setGoogleMapsLoaded] = useState(false);
   const [formData, setFormData] = useState<AlertFormData>({
     title: '',
+    categoryCode: '',
     category: '',
     severity: 'medium',
     description: '',
     location: {
       address: '',
-      coordinates: [0, 0]
+      coordinates: [0, 0],
+      city: 'Yaoundé',
+      region: 'Centre',
+      isValidated: false,
+      validationSource: 'manual'
     },
     mediaFiles: [],
     expiresAt: '',
@@ -266,17 +195,33 @@ useEffect(() => {
         if (place && place.geometry && place.geometry.location) {
           const lat = place.geometry.location.lat();
           const lng = place.geometry.location.lng();
-          
-          setFormData(prev => ({
-            ...prev,
-            location: {
-              address: place.formatted_address || '',
-              coordinates: [lat, lng]
-            }
-          }));
-          
-          console.log('✅ Location updated:', { lat, lng, address: place.formatted_address });
-          toast.success('Adresse sélectionnée');
+
+          // Enrichir les données de localisation
+          enrichLocationData(place.formatted_address || '', [lat, lng])
+            .then(enrichedLocation => {
+              setFormData(prev => ({
+                ...prev,
+                location: enrichedLocation
+              }));
+              console.log('✅ Location updated with enriched data:', enrichedLocation);
+              toast.success('Adresse sélectionnée et enrichie');
+            })
+            .catch(error => {
+              console.error('Error enriching location:', error);
+              // Fallback vers localisation basique
+              setFormData(prev => ({
+                ...prev,
+                location: {
+                  address: place.formatted_address || '',
+                  coordinates: [lat, lng],
+                  city: 'Yaoundé',
+                  region: 'Centre',
+                  isValidated: true,
+                  validationSource: 'google_places'
+                }
+              }));
+              toast.success('Adresse sélectionnée');
+            });
         } else {
           console.warn('⚠️ Place without geometry selected');
           toast.warning('Adresse incomplète', {
@@ -317,6 +262,7 @@ useEffect(() => {
     if (categoryDef) {
       setFormData(prev => ({
         ...prev,
+        categoryCode,
         category: categoryDef.name,
         severity: categoryDef.defaultSeverity,
         categorySpecificFields: initializeCategoryFields(categoryCode)
@@ -373,18 +319,40 @@ useEffect(() => {
               address = response.results[0].formatted_address;
               console.log('🔄 Adresse obtenue:', address);
             }
-              setFormData(prev => ({
-                ...prev,
-                location: {
-                  address: address,
-                  coordinates: [latitude, longitude]
-                }
-              }));
 
-              if (inputRef.current) {
-                inputRef.current.value = address;
-              }
-              toast.success('Position actuelle récupérée');
+            // Enrichir les données de localisation
+            enrichLocationData(address, [latitude, longitude])
+              .then(enrichedLocation => {
+                setFormData(prev => ({
+                  ...prev,
+                  location: enrichedLocation
+                }));
+
+                if (inputRef.current) {
+                  inputRef.current.value = enrichedLocation.address;
+                }
+                toast.success('Position actuelle récupérée et enrichie');
+              })
+              .catch(error => {
+                console.error('Error enriching current location:', error);
+                // Fallback
+                setFormData(prev => ({
+                  ...prev,
+                  location: {
+                    address: address,
+                    coordinates: [latitude, longitude],
+                    city: 'Yaoundé',
+                    region: 'Centre',
+                    isValidated: true,
+                    validationSource: 'gps'
+                  }
+                }));
+
+                if (inputRef.current) {
+                  inputRef.current.value = address;
+                }
+                toast.success('Position actuelle récupérée');
+              });
           } catch (error) {
             console.error('❌ Erreur lors de la récupération de la position:', error);
           // Si le geocoder échoue, on garde juste les coordonnées
@@ -393,7 +361,11 @@ useEffect(() => {
             ...prev,
             location: {
               address: fallbackAddress,
-              coordinates: [latitude, longitude]
+              coordinates: [latitude, longitude],
+              city: 'Yaoundé',
+              region: 'Centre',
+              isValidated: false,
+              validationSource: 'gps'
             }
           }));
           if (inputRef.current) {
@@ -510,35 +482,56 @@ useEffect(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validation
-    if (!formData.category) {
+
+    // Validation enrichie
+    const validationResult = validateAlertData(formData);
+    if (!validationResult.isValid) {
+      validationResult.errors.forEach(error => toast.error(error));
+      return;
+    }
+
+    // Validation supplémentaires spécifiques
+    if (!formData.categoryCode) {
       toast.error('Veuillez sélectionner une catégorie');
-      return;
-    }
-    if (!formData.description.trim()) {
-      toast.error('Veuillez saisir une description');
-      return;
-    }
-    if (!formData.location.address.trim()) {
-      toast.error('Veuillez saisir une adresse');
       return;
     }
 
     setLoading(true);
 
     try {
+      // Générer une référence enrichie
+      const category = getCategoryByCode(formData.categoryCode);
+      const urgencyAssessment = calculateDynamicSeverity(
+        formData.categoryCode,
+        {
+          hasVictims: formData.categorySpecificFields?.hasVictims || false,
+          locationRisk: 'medium',
+          timeOfDay: new Date().getHours() >= 6 && new Date().getHours() <= 18 ? 'day' : 'night',
+          populationDensity: 'high'
+        }
+      );
+
+      // Calculer le score de confiance
+      const confidenceScore = calculateConfidenceScore(
+        'medium', // trustLevel par défaut pour création manuelle
+        formData.mediaFiles.length > 0,
+        formData.location.precision,
+        0 // pas de confirmations à la création
+      );
+
       const alertData = {
         title: formData.title,
+        ref_alert_id: generateEnhancedAlertRef(formData.category, urgencyAssessment === 'critical' ? 1 : urgencyAssessment === 'high' ? 2 : 3),
         category: formData.category,
-        severity: formData.severity,
+        severity: urgencyAssessment,
         description: formData.description,
         location: formData.location,
         mediaUrl: formData.mediaFiles.length > 0 ? formData.mediaFiles[0].url : undefined,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : undefined,
         source: getSourceFromChannel(),
         status: formData.status,
-        categorySpecificFields: formData.categorySpecificFields
+        categorySpecificFields: formData.categorySpecificFields,
+        confidenceScore
       };
 
       const response = await createManualAlert(alertData);
@@ -576,13 +569,17 @@ useEffect(() => {
 
   // Rendu des champs spécifiques par catégorie
   const renderCategorySpecificFields = () => {
-    if (!formData.category || !formData.categorySpecificFields) return null;
+    if (!formData.categoryCode || !formData.categorySpecificFields) return null;
 
     const fields = formData.categorySpecificFields;
+    const category = getCategoryByCode(formData.categoryCode);
+    if (!category) return null;
 
-    switch (formData.category) {
-      case 'Accident de circulation':
-        const accidentFields = fields as AccidentFields;
+    // Utiliser le code de catégorie pour déterminer le rendu
+    switch (formData.categoryCode) {
+      case 'ACCG':
+      case 'ACCL':
+        const accidentFields = fields as TrafficAccidentFields;
         return (
           <Card>
             <CardHeader>
@@ -593,53 +590,76 @@ useEffect(() => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="vehicleType">Type de véhicule</Label>
-                <Select value={accidentFields.vehicleType} onValueChange={(value) => updateCategoryField('vehicleType', value)}>
+                <Label htmlFor="severity">Gravité de l&apos;accident</Label>
+                <Select value={accidentFields.severity} onValueChange={(value) => updateCategoryField('severity', value)}>
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Sélectionner le type" />
+                    <SelectValue placeholder="Sélectionner la gravité" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="voiture">Voiture</SelectItem>
-                    <SelectItem value="moto">Moto</SelectItem>
-                    <SelectItem value="camion">Camion</SelectItem>
-                    <SelectItem value="bus">Bus</SelectItem>
-                    <SelectItem value="velo">Vélo</SelectItem>
-                    <SelectItem value="pieton">Piéton</SelectItem>
+                    <SelectItem value="materiel">Matériel seulement</SelectItem>
+                    <SelectItem value="leger">Léger</SelectItem>
+                    <SelectItem value="grave">Grave</SelectItem>
+                    <SelectItem value="mortel">Mortel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
-              <div>
-                <Label htmlFor="vehicleCount">Nombre de véhicules impliqués</Label>
-                <Input
-                  id="vehicleCount"
-                  type="number"
-                  min="1"
-                  value={accidentFields.vehicleCount}
-                  onChange={(e) => updateCategoryField('vehicleCount', parseInt(e.target.value) || 1)}
-                  className="mt-1"
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="hasVictims"
+                  checked={accidentFields.casualties?.hasVictims || false}
+                  onChange={(e) => updateCategoryField('casualties', { ...accidentFields.casualties, hasVictims: e.target.checked })}
+                  className="rounded"
                 />
+                <Label htmlFor="hasVictims">Il y a des victimes</Label>
               </div>
-              
-              <div>
-                <Label htmlFor="casualties">Blessés / Morts présumés</Label>
-                <Textarea
-                  id="casualties"
-                  placeholder="Description des victimes..."
-                  value={accidentFields.casualties}
-                  onChange={(e) => updateCategoryField('casualties', e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              
+
+              {accidentFields.casualties?.hasVictims && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="victimCount">Nombre total</Label>
+                    <Input
+                      id="victimCount"
+                      type="number"
+                      min="0"
+                      value={accidentFields.casualties.victimCount}
+                      onChange={(e) => updateCategoryField('casualties', { ...accidentFields.casualties, victimCount: parseInt(e.target.value) || 0 })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="serious">Blessés graves</Label>
+                    <Input
+                      id="serious"
+                      type="number"
+                      min="0"
+                      value={accidentFields.casualties.serious}
+                      onChange={(e) => updateCategoryField('casualties', { ...accidentFields.casualties, serious: parseInt(e.target.value) || 0 })}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="deaths">Décès</Label>
+                    <Input
+                      id="deaths"
+                      type="number"
+                      min="0"
+                      value={accidentFields.casualties.deaths}
+                      onChange={(e) => updateCategoryField('casualties', { ...accidentFields.casualties, deaths: parseInt(e.target.value) || 0 })}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
                   id="roadBlocked"
-                  checked={accidentFields.roadBlocked}
-                  onChange={(e) => updateCategoryField('roadBlocked', e.target.checked)}
+                  checked={accidentFields.trafficImpact?.roadBlocked || false}
+                  onChange={(e) => updateCategoryField('trafficImpact', { ...accidentFields.trafficImpact, roadBlocked: e.target.checked })}
                   className="rounded"
-                  title="Route bloquée"
                 />
                 <Label htmlFor="roadBlocked">Route bloquée</Label>
               </div>
@@ -647,10 +667,10 @@ useEffect(() => {
           </Card>
         );
 
-      case 'Agression':
-      case 'Vol':
-      case 'Cambriolage':
-        const aggressionFields = fields as AggressionFields;
+      case 'ASGC':
+      case 'ASS':
+      case 'VOL':
+        const theftFields = fields as TheftFields;
         return (
           <Card>
             <CardHeader>
@@ -661,66 +681,91 @@ useEffect(() => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="aggressionType">Type d&apos;agression</Label>
-                <Select value={aggressionFields.aggressionType} onValueChange={(value) => updateCategoryField('aggressionType', value)}>
+                <Label htmlFor="theftType">Type d&apos;incident</Label>
+                <Select value={theftFields.theftType} onValueChange={(value) => updateCategoryField('theftType', value)}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Sélectionner le type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="vol_main_armee">Vol à main armée</SelectItem>
                     <SelectItem value="pickpocket">Pickpocket</SelectItem>
-                    <SelectItem value="cambriolage">Cambriolage</SelectItem>
-                    <SelectItem value="agression_physique">Agression physique</SelectItem>
                     <SelectItem value="vol_vehicule">Vol de véhicule</SelectItem>
+                    <SelectItem value="cambriolage_domicile">Cambriolage domicile</SelectItem>
+                    <SelectItem value="cambriolage_commerce">Cambriolage commerce</SelectItem>
+                    <SelectItem value="vol_portable">Vol portable</SelectItem>
+                    <SelectItem value="vol_moto">Vol moto</SelectItem>
                     <SelectItem value="autre">Autre</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+
+              <div>
+                <Label htmlFor="locationType">Type de lieu</Label>
+                <Select value={theftFields.location?.locationType} onValueChange={(value) => updateCategoryField('location', { ...theftFields.location, locationType: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le lieu" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="domicile">Domicile</SelectItem>
+                    <SelectItem value="commerce">Commerce</SelectItem>
+                    <SelectItem value="rue">Rue</SelectItem>
+                    <SelectItem value="transport">Transport</SelectItem>
+                    <SelectItem value="marche">Marché</SelectItem>
+                    <SelectItem value="ecole">École</SelectItem>
+                    <SelectItem value="bureau">Bureau</SelectItem>
+                    <SelectItem value="autre">Autre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="weaponInvolved"
-                  checked={aggressionFields.weaponInvolved}
-                  onChange={(e) => updateCategoryField('weaponInvolved', e.target.checked)}
+                  id="weaponUsed"
+                  checked={theftFields.weapon?.weaponUsed || false}
+                  onChange={(e) => updateCategoryField('weapon', { ...theftFields.weapon, weaponUsed: e.target.checked })}
                   className="rounded"
-                  title="Arme impliquée"
                 />
-                <Label htmlFor="weaponInvolved">Arme impliquée</Label>
+                <Label htmlFor="weaponUsed">Arme utilisée</Label>
               </div>
-              
-              {aggressionFields.weaponInvolved && (
+
+              {theftFields.weapon?.weaponUsed && (
                 <div>
                   <Label htmlFor="weaponType">Type d&apos;arme</Label>
-                  <Input
-                    id="weaponType"
-                    placeholder="Description de l'arme..."
-                    value={aggressionFields.weaponType || ''}
-                    onChange={(e) => updateCategoryField('weaponType', e.target.value)}
-                    className="mt-1"
-                  />
+                  <Select value={theftFields.weapon.weaponType} onValueChange={(value) => updateCategoryField('weapon', { ...theftFields.weapon, weaponType: value })}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Sélectionner l'arme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="arme_feu">Arme à feu</SelectItem>
+                      <SelectItem value="couteau">Couteau</SelectItem>
+                      <SelectItem value="machette">Machette</SelectItem>
+                      <SelectItem value="baton">Bâton</SelectItem>
+                      <SelectItem value="autre">Autre</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
-              
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
                   id="suspectsFled"
-                  checked={aggressionFields.suspectsFled}
-                  onChange={(e) => updateCategoryField('suspectsFled', e.target.checked)}
+                  checked={theftFields.suspects?.fled || false}
+                  onChange={(e) => updateCategoryField('suspects', { ...theftFields.suspects, fled: e.target.checked })}
                   className="rounded"
-                  title="Suspect(s) en fuite"
                 />
                 <Label htmlFor="suspectsFled">Suspect(s) en fuite</Label>
               </div>
-              
+
               <div>
-                <Label htmlFor="suspectDescription">Description suspect(s)</Label>
-                <Textarea
-                  id="suspectDescription"
-                  placeholder="Description physique, vêtements, direction de fuite..."
-                  value={aggressionFields.suspectDescription || ''}
-                  onChange={(e) => updateCategoryField('suspectDescription', e.target.value)}
+                <Label htmlFor="suspectCount">Nombre de suspects</Label>
+                <Input
+                  id="suspectCount"
+                  type="number"
+                  min="1"
+                  value={theftFields.suspects?.count || 1}
+                  onChange={(e) => updateCategoryField('suspects', { ...theftFields.suspects, count: parseInt(e.target.value) || 1 })}
                   className="mt-1"
                 />
               </div>
@@ -728,8 +773,9 @@ useEffect(() => {
           </Card>
         );
 
-      case 'Disparition':
-        const disparitionFields = fields as DisparitionFields;
+      case 'DISC':
+      case 'DIS':
+        const disparitionFields = fields as DisappearanceFields;
         return (
           <Card>
             <CardHeader>
@@ -739,35 +785,65 @@ useEffect(() => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Type de recherche */}
+              <div>
+                <Label htmlFor="searchType">Type d&apos;avis</Label>
+                <Select value={disparitionFields.searchType} onValueChange={(value) => updateCategoryField('searchType', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner le type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="missing">Personne disparue</SelectItem>
+                    <SelectItem value="wanted">Avis de recherche</SelectItem>
+                    <SelectItem value="runaway">Fugue</SelectItem>
+                    <SelectItem value="lost_child">Enfant perdu</SelectItem>
+                    <SelectItem value="alzheimer">Alzheimer/Démence</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Message d'urgence personnalisé */}
+              <div>
+                <Label htmlFor="urgencyMessage">Message d&apos;urgence (optionnel)</Label>
+                <Textarea
+                  id="urgencyMessage"
+                  placeholder="Ex: Nous recherchons désespérément notre fille..."
+                  value={disparitionFields.urgencyMessage}
+                  onChange={(e) => updateCategoryField('urgencyMessage', e.target.value)}
+                  className="mt-1 min-h-[80px]"
+                />
+              </div>
+
+              {/* Informations personnelles */}
               <div>
                 <Label htmlFor="fullName">Nom complet *</Label>
                 <Input
                   id="fullName"
                   placeholder="Nom et prénom..."
-                  value={disparitionFields.fullName}
-                  onChange={(e) => updateCategoryField('fullName', e.target.value)}
+                  value={disparitionFields.person?.fullName}
+                  onChange={(e) => updateCategoryField('person', { ...disparitionFields.person, fullName: e.target.value })}
                   className="mt-1"
                   required
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="approximateAge">Âge approximatif</Label>
+                  <Label htmlFor="age">Âge</Label>
                   <Input
-                    id="approximateAge"
+                    id="age"
                     type="number"
                     min="0"
                     max="120"
-                    value={disparitionFields.approximateAge}
-                    onChange={(e) => updateCategoryField('approximateAge', parseInt(e.target.value) || 0)}
+                    value={disparitionFields.person?.age}
+                    onChange={(e) => updateCategoryField('person', { ...disparitionFields.person, age: parseInt(e.target.value) || 0 })}
                     className="mt-1"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="gender">Genre</Label>
-                  <Select value={disparitionFields.gender} onValueChange={(value) => updateCategoryField('gender', value)}>
+                  <Select value={disparitionFields.person?.gender} onValueChange={(value) => updateCategoryField('person', { ...disparitionFields.person, gender: value })}>
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Sélectionner" />
                     </SelectTrigger>
@@ -775,50 +851,127 @@ useEffect(() => {
                       <SelectItem value="homme">Homme</SelectItem>
                       <SelectItem value="femme">Femme</SelectItem>
                       <SelectItem value="enfant">Enfant</SelectItem>
-                      <SelectItem value="non_specifie">Non spécifié</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              
+
+              {/* Circonstances */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="lastSeenDate">Date de disparition</Label>
+                  <Input
+                    id="lastSeenDate"
+                    type="date"
+                    value={disparitionFields.circumstances?.lastSeenDate}
+                    onChange={(e) => updateCategoryField('circumstances', { ...disparitionFields.circumstances, lastSeenDate: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastSeenTime">Heure de disparition</Label>
+                  <Input
+                    id="lastSeenTime"
+                    type="time"
+                    value={disparitionFields.circumstances?.lastSeenTime}
+                    onChange={(e) => updateCategoryField('circumstances', { ...disparitionFields.circumstances, lastSeenTime: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
               <div>
-                <Label htmlFor="lastKnownLocation">Dernière localisation connue</Label>
+                <Label htmlFor="lastSeenLocation">Dernière localisation connue</Label>
                 <Input
-                  id="lastKnownLocation"
+                  id="lastSeenLocation"
                   placeholder="Dernier endroit où la personne a été vue..."
-                  value={disparitionFields.lastKnownLocation}
-                  onChange={(e) => updateCategoryField('lastKnownLocation', e.target.value)}
+                  value={disparitionFields.circumstances?.lastSeenLocation}
+                  onChange={(e) => updateCategoryField('circumstances', { ...disparitionFields.circumstances, lastSeenLocation: e.target.value })}
                   className="mt-1"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="physicalDescription">Description physique</Label>
                 <Textarea
                   id="physicalDescription"
                   placeholder="Taille, corpulence, couleur de cheveux, signes distinctifs..."
-                  value={disparitionFields.physicalDescription}
-                  onChange={(e) => updateCategoryField('physicalDescription', e.target.value)}
+                  value={disparitionFields.physicalDescription?.distinguishingMarks}
+                  onChange={(e) => updateCategoryField('physicalDescription', { ...disparitionFields.physicalDescription, distinguishingMarks: e.target.value })}
                   className="mt-1"
                 />
               </div>
-              
+
               <div>
                 <Label htmlFor="clothingDescription">Vêtements portés</Label>
                 <Textarea
                   id="clothingDescription"
                   placeholder="Description des vêtements lors de la disparition..."
-                  value={disparitionFields.clothingDescription}
-                  onChange={(e) => updateCategoryField('clothingDescription', e.target.value)}
+                  value={disparitionFields.lastClothing?.description}
+                  onChange={(e) => updateCategoryField('lastClothing', { ...disparitionFields.lastClothing, description: e.target.value })}
                   className="mt-1"
                 />
+              </div>
+
+              {/* Numéros de contact pour signalement */}
+              <div>
+                <Label>Numéros à contacter pour signaler (famille/autorités)</Label>
+                <div className="space-y-2 mt-2">
+                  {(disparitionFields.contactNumbers || []).map((contact, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        placeholder="Numéro (ex: 693136789)"
+                        value={contact.phone}
+                        onChange={(e) => {
+                          const newContacts = [...(disparitionFields.contactNumbers || [])];
+                          newContacts[index] = { ...contact, phone: e.target.value };
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Propriétaire"
+                        value={contact.owner}
+                        onChange={(e) => {
+                          const newContacts = [...(disparitionFields.contactNumbers || [])];
+                          newContacts[index] = { ...contact, owner: e.target.value };
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newContacts = (disparitionFields.contactNumbers || []).filter((_, i) => i !== index);
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newContacts = [...(disparitionFields.contactNumbers || []), { phone: '', owner: '' }];
+                      updateCategoryField('contactNumbers', newContacts);
+                    }}
+                  >
+                    + Ajouter un numéro
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
         );
 
-      case 'Urgence médicale':
-        const urgenceFields = fields as UrgenceFields;
+      case 'MEDC':
+      case 'MED':
+        const medicalFields = fields as MedicalEmergencyFields;
         return (
           <Card>
             <CardHeader>
@@ -830,61 +983,93 @@ useEffect(() => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="emergencyType">Type d&apos;urgence</Label>
-                <Select value={urgenceFields.emergencyType} onValueChange={(value) => updateCategoryField('emergencyType', value)}>
+                <Select value={medicalFields.emergencyType} onValueChange={(value) => updateCategoryField('emergencyType', value)}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Sélectionner le type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="accident">Accident</SelectItem>
                     <SelectItem value="malaise">Malaise</SelectItem>
-                    <SelectItem value="crise">Crise (cardiaque, épilepsie...)</SelectItem>
+                    <SelectItem value="crise_cardiaque">Crise cardiaque</SelectItem>
+                    <SelectItem value="crise_epilepsie">Crise d&apos;épilepsie</SelectItem>
                     <SelectItem value="blessure_grave">Blessure grave</SelectItem>
                     <SelectItem value="intoxication">Intoxication</SelectItem>
+                    <SelectItem value="noyade">Noyade</SelectItem>
+                    <SelectItem value="brulure">Brûlure</SelectItem>
                     <SelectItem value="autre">Autre</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
                 <Label htmlFor="victimCount">Nombre de victimes</Label>
                 <Input
                   id="victimCount"
                   type="number"
                   min="1"
-                  value={urgenceFields.victimCount}
+                  value={medicalFields.victimCount}
                   onChange={(e) => updateCategoryField('victimCount', parseInt(e.target.value) || 1)}
                   className="mt-1"
                 />
               </div>
-              
+
               <div>
-                <Label htmlFor="victimCondition">État des victimes</Label>
-                <Textarea
-                  id="victimCondition"
-                  placeholder="Description de l'état des victimes..."
-                  value={urgenceFields.victimCondition}
-                  onChange={(e) => updateCategoryField('victimCondition', e.target.value)}
-                  className="mt-1"
-                />
+                <Label htmlFor="consciousness">État de conscience</Label>
+                <Select value={medicalFields.consciousness} onValueChange={(value) => updateCategoryField('consciousness', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner l'état" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="conscient">Conscient</SelectItem>
+                    <SelectItem value="semi_conscient">Semi-conscient</SelectItem>
+                    <SelectItem value="inconscient">Inconscient</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              
+
+              <div>
+                <Label htmlFor="breathing">Respiration</Label>
+                <Select value={medicalFields.breathing} onValueChange={(value) => updateCategoryField('breathing', value)}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="État respiratoire" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normale">Normale</SelectItem>
+                    <SelectItem value="difficile">Difficile</SelectItem>
+                    <SelectItem value="arretee">Arrêtée</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="medicalServicesContacted"
-                  checked={urgenceFields.medicalServicesContacted}
-                  onChange={(e) => updateCategoryField('medicalServicesContacted', e.target.checked)}
+                  id="bleeding"
+                  checked={medicalFields.bleeding || false}
+                  onChange={(e) => updateCategoryField('bleeding', e.target.checked)}
                   className="rounded"
-                  title="Services médicaux contactés"
                 />
-                <Label htmlFor="medicalServicesContacted">Services médicaux contactés</Label>
+                <Label htmlFor="bleeding">Saignement visible</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="ambulanceNeeded"
+                  checked={medicalFields.ambulanceNeeded || false}
+                  onChange={(e) => updateCategoryField('ambulanceNeeded', e.target.checked)}
+                  className="rounded"
+                />
+                <Label htmlFor="ambulanceNeeded">Ambulance nécessaire</Label>
               </div>
             </CardContent>
           </Card>
         );
 
-      case 'Incendie':
-        const incendieFields = fields as IncendieFields;
+      case 'FIRV':
+      case 'FIR':
+      case 'FORF':
+        const fireFields = fields as FireFields;
         return (
           <Card>
             <CardHeader>
@@ -896,60 +1081,64 @@ useEffect(() => {
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="fireType">Type d&apos;incendie</Label>
-                <Select value={incendieFields.fireType} onValueChange={(value) => updateCategoryField('fireType', value)}>
+                <Select value={fireFields.fireType} onValueChange={(value) => updateCategoryField('fireType', value)}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Sélectionner le type" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="domestique">Domestique</SelectItem>
-                    <SelectItem value="foret">Forêt</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
                     <SelectItem value="industriel">Industriel</SelectItem>
                     <SelectItem value="vehicule">Véhicule</SelectItem>
+                    <SelectItem value="foret">Forêt</SelectItem>
+                    <SelectItem value="brousse">Brousse</SelectItem>
                     <SelectItem value="autre">Autre</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div>
-                <Label htmlFor="suspectedSource">Source supposée</Label>
-                <Input
-                  id="suspectedSource"
-                  placeholder="Origine présumée de l'incendie..."
-                  value={incendieFields.suspectedSource || ''}
-                  onChange={(e) => updateCategoryField('suspectedSource', e.target.value)}
-                  className="mt-1"
-                />
+                <Label htmlFor="size">Ampleur du feu</Label>
+                <Select value={fireFields.extent?.size} onValueChange={(value) => updateCategoryField('extent', { ...fireFields.extent, size: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Sélectionner l'ampleur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="petit">Petit</SelectItem>
+                    <SelectItem value="moyen">Moyen</SelectItem>
+                    <SelectItem value="grand">Grand</SelectItem>
+                    <SelectItem value="majeur">Majeur</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="spreadRisk"
-                  checked={incendieFields.spreadRisk}
-                  onChange={(e) => updateCategoryField('spreadRisk', e.target.checked)}
+                  id="hasVictims"
+                  checked={fireFields.casualties?.hasVictims || false}
+                  onChange={(e) => updateCategoryField('casualties', { ...fireFields.casualties, hasVictims: e.target.checked })}
                   className="rounded"
-                  title="Risque de propagation"
                 />
-                <Label htmlFor="spreadRisk">Risque de propagation</Label>
+                <Label htmlFor="hasVictims">Il y a des victimes</Label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id="emergencyServicesInformed"
-                  checked={incendieFields.emergencyServicesInformed}
-                  onChange={(e) => updateCategoryField('emergencyServicesInformed', e.target.checked)}
+                  id="fireServiceCalled"
+                  checked={fireFields.response?.fireServiceCalled || false}
+                  onChange={(e) => updateCategoryField('response', { ...fireFields.response, fireServiceCalled: e.target.checked })}
                   className="rounded"
-                  title="Services d&apos;urgence informés"
                 />
-                <Label htmlFor="emergencyServicesInformed">Services d&apos;urgence informés</Label>
+                <Label htmlFor="fireServiceCalled">Pompiers contactés</Label>
               </div>
             </CardContent>
           </Card>
         );
 
-      case 'Autre':
-        const autreFields = fields as AutreFields;
+      case 'AUT':
+        const autreFields = fields as any; // Flexible type for other categories
         return (
           <Card>
             <CardHeader>
@@ -984,9 +1173,30 @@ useEffect(() => {
           </Card>
         );
 
-      // Continuer avec les autres catégories...
+      // Autres catégories avec formulaire générique
       default:
-        return null;
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <span>{category.icon}</span>
+                <span>Détails spécifiques - {category.name}</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="specificDetails">Détails supplémentaires</Label>
+                <Textarea
+                  id="specificDetails"
+                  placeholder="Informations spécifiques à cette catégorie..."
+                  value={fields?.specificDetails || ''}
+                  onChange={(e) => updateCategoryField('specificDetails', e.target.value)}
+                  className="mt-1 min-h-[100px]"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        );
     }
   };
 
@@ -1040,7 +1250,7 @@ useEffect(() => {
               <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="category">Catégorie *</Label>
-                <Select value={formData.category} onValueChange={handleCategoryChange}>
+                <Select value={formData.categoryCode} onValueChange={handleCategoryChange}>
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Sélectionner une catégorie" />
                   </SelectTrigger>
@@ -1095,30 +1305,7 @@ useEffect(() => {
                   </SelectContent>
                 </Select>
                 {/* Informations sur la catégorie sélectionnée */}
-                {formData.category && (() => {
-                  const selectedCategory = getAllCategories().find(cat => cat.name === formData.category);
-                  return selectedCategory ? (
-                    <div className="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="font-medium" style={{color: selectedCategory.color}}>
-                          {selectedCategory.icon} {selectedCategory.name}
-                        </span>
-                        <span className="text-xs bg-gray-200 px-2 py-1 rounded">{selectedCategory.code}</span>
-                      </div>
-                      <p className="text-gray-600 text-xs">{selectedCategory.description}</p>
-                      <p className="text-xs mt-1">
-                        <span className="font-medium">Temps d&apos;intervention:</span> {selectedCategory.responseTime} min
-                      </p>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {selectedCategory.emergencyServices.map(service => (
-                          <span key={service} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            {service}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null;
-                })()}
+              
               </div>
                 <div>
                   <Label htmlFor="severity">Niveau de gravité *</Label>
@@ -1161,6 +1348,32 @@ useEffect(() => {
                     </Badge>
                   )*/}
                 </div>
+              </div>
+              <div>
+              {formData.categoryCode && (() => {
+                  const selectedCategory = getCategoryByCode(formData.categoryCode);
+                  return selectedCategory ? (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="font-medium" style={{color: selectedCategory.color}}>
+                          {selectedCategory.icon} {selectedCategory.name}
+                        </span>
+                        <span className="text-xs bg-gray-200 px-2 py-1 rounded">{selectedCategory.code}</span>
+                      </div>
+                      <p className="text-gray-600 text-xs">{selectedCategory.description}</p>
+                      <p className="text-xs mt-1">
+                        <span className="font-medium">Temps d&apos;intervention:</span> {selectedCategory.responseTime} min
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {selectedCategory.emergencyServices.map(service => (
+                          <span key={service} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <div>
                 <Label htmlFor="title">Titre du signalement</Label>

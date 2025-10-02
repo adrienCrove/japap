@@ -17,7 +17,7 @@ L.Icon.Default.mergeOptions({
 interface MapAlert {
   id: string;
   category: string;
-  severity: 'faible' | 'moyen' | 'elevé' | 'critique';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'active' | 'pending' | 'resolved';
   description: string;
   title: string;
@@ -160,9 +160,9 @@ export default function LeafletMap({
           color: white;
           font-weight: bold;
         ">
-          ${alert.severity === 'critique' ? '🔥' : 
-            alert.severity === 'elevé' ? '⚠️' : 
-            alert.severity === 'moyen' ? '⚡' : '📍'}
+          ${alert.severity === 'critical' ? '🔥' : 
+            alert.severity === 'high' ? '⚠️' : 
+            alert.severity === 'medium' ? '⚡' : '📍'}
         </div>
       `,
       className: 'custom-alert-icon',

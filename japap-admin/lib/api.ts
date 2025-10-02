@@ -14,6 +14,8 @@ export interface Pagination {
   page: number;
   limit: number;
   totalPages: number;
+  hasNext?: boolean;
+  hasPrev?: boolean;
 }
 
 // Interfaces du Dashboard
@@ -99,6 +101,7 @@ export interface AlertsApiResponse {
 }
 
 export interface AlertsFilters {
+  search?: string;
   status?: string;
   category?: string;
   severity?: string;
@@ -108,6 +111,28 @@ export interface AlertsFilters {
 }
 
 export type BulkAction = "validate" | "reject" | "archive";
+
+// Interfaces des Utilisateurs
+export interface UserData {
+  id: string;
+  phone: string;
+  name?: string;
+  email?: string;
+  gender?: 'male' | 'female' | 'other';
+  role: 'user' | 'moderator' | 'admin';
+  status: 'active' | 'pending' | 'suspended' | 'blocked';
+  reputationScore: number;
+  location?: {
+    address: string;
+    city: string;
+    coordinates: [number, number];
+  };
+  birthDate?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export type UserCreationData = Omit<UserData, 'id' | 'createdAt'>;
 
 // Fonctions API (génériques)
 async function fetchApi<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
@@ -148,8 +173,18 @@ async function fetchApi<T>(url: string, options: RequestInit = {}): Promise<ApiR
 
 // Fonctions API pour les Alertes
 export async function fetchAlerts(filters: AlertsFilters = {}): Promise<ApiResponse<AlertsApiResponse>> {
-    // ... (le code mocké reste pour l'instant)
-    return fetchApi<AlertsApiResponse>(`${API_BASE_URL}/api/alerts`);
+    const queryParams = new URLSearchParams();
+
+    if (filters.search) queryParams.append('search', filters.search);
+    if (filters.status && filters.status !== 'all') queryParams.append('status', filters.status);
+    if (filters.category && filters.category !== 'all') queryParams.append('category', filters.category);
+    if (filters.severity && filters.severity !== 'all') queryParams.append('severity', filters.severity);
+    if (filters.source && filters.source !== 'all') queryParams.append('source', filters.source);
+    if (filters.page) queryParams.append('page', filters.page.toString());
+    if (filters.limit) queryParams.append('limit', filters.limit.toString());
+
+    const url = `${API_BASE_URL}/api/alerts${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    return fetchApi<AlertsApiResponse>(url);
 }
 
 export async function createManualAlert(data: AlertCreationData): Promise<ApiResponse<Alert>> {
@@ -159,10 +194,121 @@ export async function createManualAlert(data: AlertCreationData): Promise<ApiRes
   });
 }
 
+export async function updateAlert(id: string, data: Partial<Alert>): Promise<ApiResponse<Alert>> {
+  return fetchApi<Alert>(`${API_BASE_URL}/api/alerts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function performBulkAction(action: BulkAction, alertIds: string[]): Promise<ApiResponse<{ count: number }>> {
   // Simuler une action en lot
   console.log(`Performing bulk action '${action}' on alerts:`, alertIds);
   return Promise.resolve({ success: true, message: `Action '${action}' effectuée sur ${alertIds.length} alertes.`, data: { count: alertIds.length } });
+}
+
+// Fonctions API pour les Utilisateurs
+export async function createUser(data: UserCreationData): Promise<ApiResponse<UserData>> {
+  return fetchApi<UserData>(`${API_BASE_URL}/api/users`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUser(id: string, data: Partial<UserData>): Promise<ApiResponse<UserData>> {
+  return fetchApi<UserData>(`${API_BASE_URL}/api/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUser(id: string): Promise<ApiResponse<void>> {
+  return fetchApi<void>(`${API_BASE_URL}/api/users/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function fetchUsers(filters?: { role?: string; status?: string; search?: string }): Promise<ApiResponse<UserData[]>> {
+  const queryParams = new URLSearchParams();
+
+  if (filters?.role && filters.role !== 'all') queryParams.append('role', filters.role);
+  if (filters?.status && filters.status !== 'all') queryParams.append('status', filters.status);
+  if (filters?.search) queryParams.append('search', filters.search);
+
+  const url = `${API_BASE_URL}/api/users${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+  return fetchApi<UserData[]>(url);
+}
+
+export async function fetchUserDetails(userId: string): Promise<ApiResponse<any>> {
+  return fetchApi<any>(`${API_BASE_URL}/api/users/${userId}`);
+}
+
+// PATCH /api/users/:id/status - Changer le statut d'un utilisateur
+export async function updateUserStatus(userId: string, status: string): Promise<ApiResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Erreur lors de la mise à jour du statut'
+      };
+    }
+
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    return {
+      success: false,
+      error: handleApiError(error)
+    };
+  }
+}
+
+// PUT /api/users/:id - Mettre à jour le rôle d'un utilisateur
+export async function updateUserRole(userId: string, role: string): Promise<ApiResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Erreur lors de la mise à jour du rôle'
+      };
+    }
+
+    return {
+      success: true,
+      data: data.data,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    return {
+      success: false,
+      error: handleApiError(error)
+    };
+  }
 }
 
 // Fonction utilitaire pour gérer les erreurs d'API (inchangée)

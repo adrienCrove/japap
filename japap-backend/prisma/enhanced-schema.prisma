@@ -1,0 +1,198 @@
+// Schema Prisma enrichi - Version améliorée
+// Ce fichier propose les améliorations sans remplacer l'existant
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Table existante User (inchangée)
+model User {
+  id              String              @id @default(uuid())
+  phone           String              @unique
+  name            String?
+  gender          String?
+  role            String              @default("user")
+  reputationScore Int                 @default(0)
+  location        Json?
+  createdAt       DateTime            @default(now())
+  
+  // Relations existantes
+  alerts          Alert[]
+  confirmations   AlertConfirmation[]
+  notifications   Notification[]
+  subscriptions   Subscription[]
+  
+  // NOUVELLES relations
+  verifications   AlertVerification[]
+  moderations     AlertModeration[]
+}
+
+// Table Alert enrichie
+model Alert {
+  // Champs existants (inchangés)
+  id            String              @id @default(uuid())
+  userId        String?
+  ref_alert_id  String
+  title         String
+  displayTitle  String
+  category      String
+  severity      String?
+  description   String?
+  location      Json?               // Maintenant avec structure EnhancedLocation
+  source        String?
+  mediaUrl      String?
+  expiresAt     DateTime?
+  status        String              @default("active")
+  createdAt     DateTime            @default(now())
+  
+  // NOUVEAUX champs temporels
+  reportedAt       DateTime    @default(now())
+  incidentDateTime DateTime?                    // Heure réelle de l'incident
+  estimatedDuration Int?                        // Durée estimée (minutes)
+  lastUpdatedAt    DateTime    @updatedAt       // Auto-update
+  resolvedAt       DateTime?                    // Heure de résolution
+  responseTime     Int?                         // Temps de réponse (minutes)
+  
+  // NOUVEAUX champs métadonnées
+  context          Json?                        // IncidentContext
+  urgencyData      Json?                        // UrgencyAssessment
+  verification     Json?                        // VerificationData
+  moderation       Json?                        // ModerationData
+  
+  // NOUVEAUX champs système
+  version          Int         @default(1)      // Versioning
+  isArchived       Boolean     @default(false)  // Archivage soft delete
+  
+  // Relations existantes
+  user            User?                @relation(fields: [userId], references: [id])
+  confirmedBy     AlertConfirmation[]
+  notifications   Notification[]
+  
+  // NOUVELLES relations
+  verifications   AlertVerification[]
+  moderations     AlertModeration[]
+  analytics       AlertAnalytics[]
+  media           AlertMedia[]
+  
+  @@index([category, severity])
+  @@index([status, createdAt])
+  @@index([location], type: Gin)  // Index GIN pour les requêtes JSON sur location
+}
+
+// NOUVELLE table pour les vérifications d'alertes
+model AlertVerification {
+  id              String   @id @default(uuid())
+  alertId         String
+  verifierId      String
+  method          String   // 'auto', 'manual', 'crowdsourced', 'official_source'
+  confidenceScore Int      // 0-100
+  source          String?  // Source de la vérification
+  notes           String?
+  createdAt       DateTime @default(now())
+  
+  alert           Alert    @relation(fields: [alertId], references: [id])
+  verifier        User     @relation(fields: [verifierId], references: [id])
+  
+  @@index([alertId])
+}
+
+// NOUVELLE table pour la modération
+model AlertModeration {
+  id              String   @id @default(uuid())
+  alertId         String
+  moderatorId     String?
+  action          String   // 'approve', 'flag', 'reject', 'spam'
+  reason          String?
+  autoScore       Int?     // Score automatique 0-100
+  notes           String?
+  createdAt       DateTime @default(now())
+  
+  alert           Alert    @relation(fields: [alertId], references: [id])
+  moderator       User?    @relation(fields: [moderatorId], references: [id])
+  
+  @@index([alertId, action])
+}
+
+// NOUVELLE table pour les analytics d'alertes
+model AlertAnalytics {
+  id              String   @id @default(uuid())
+  alertId         String
+  metric          String   // 'view', 'share', 'confirm', 'comment'
+  value           Int      @default(1)
+  metadata        Json?    // Métadonnées supplémentaires
+  timestamp       DateTime @default(now())
+  
+  alert           Alert    @relation(fields: [alertId], references: [id])
+  
+  @@index([alertId, metric])
+  @@index([timestamp])
+}
+
+// NOUVELLE table pour gérer plusieurs médias par alerte
+model AlertMedia {
+  id              String   @id @default(uuid())
+  alertId         String
+  type            String   // 'image', 'video', 'audio', 'document'
+  url             String
+  filename        String?
+  filesize        Int?     // Taille en bytes
+  metadata        Json?    // Métadonnées du fichier
+  isVerified      Boolean  @default(false)
+  uploadedAt      DateTime @default(now())
+  
+  alert           Alert    @relation(fields: [alertId], references: [id])
+  
+  @@index([alertId])
+}
+
+// Table existante AlertConfirmation (inchangée)
+model AlertConfirmation {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  alertId   String
+  type      String
+  createdAt DateTime @default(now())
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, alertId])
+}
+
+// Tables existantes (inchangées)
+model Subscription {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  type      String
+  value     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id      String   @id @default(uuid())
+  userId  String
+  alertId String?
+  title   String
+  content String
+  wasSeen Boolean  @default(false)
+  sentAt  DateTime @default(now())
+  alert   Alert?   @relation(fields: [alertId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+}
+
+model MessageBot {
+  id                  Int      @id @default(autoincrement())
+  platform            String
+  senderPhone         String
+  rawMessage          String
+  interpretedCategory String?
+  interpretedLocation String?
+  interpretedSeverity String?
+  alertCreated        Boolean  @default(false)
+  createdAt           DateTime @default(now())
+}

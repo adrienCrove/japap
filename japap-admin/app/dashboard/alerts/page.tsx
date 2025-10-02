@@ -51,6 +51,7 @@ export default function AlertsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [filters, setFilters] = useState<AlertsFilters>({
+    search: '',
     status: 'all',
     category: 'all',
     severity: 'all',
@@ -243,9 +244,26 @@ export default function AlertsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="space-y-4">
+            {/* Champ de recherche */}
             <div>
-              <label className="text-sm font-medium text-gray-700">État</label>
+              <label className="text-sm font-medium text-gray-700">Rechercher</label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  type="text"
+                  placeholder="Rechercher par titre, description, référence..."
+                  value={filters.search || ''}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Filtres existants */}
+            <div className="flex flex-row gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">État</label>
               <Select value={filters.status} onValueChange={(value) => handleFilterChange('status', value)}>
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Tous les états" />
@@ -302,6 +320,7 @@ export default function AlertsPage() {
                   <SelectItem value="telegram">Telegram</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
             </div>
           </div>
         </CardContent>
@@ -360,9 +379,9 @@ export default function AlertsPage() {
       )}
 
       {/* Alerts List */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading ? (
-          <div className="flex items-center justify-center h-64">
+          <div className="col-span-full flex items-center justify-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-red-600" />
           </div>
         ) : (alerts?.length ?? 0) > 0 ? (
@@ -372,30 +391,26 @@ export default function AlertsPage() {
               className="hover:shadow-md transition-shadow"
               ref={index === alerts.length - 6 ? lastAlertElementRef : null}
             >
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
-                  {/* Checkbox */}
-                  <input
-                    type="checkbox"
-                    checked={selectedAlerts.includes(alert.id)}
-                    onChange={() => handleSelectAlert(alert.id)}
-                    className="mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                    aria-label={`Sélectionner l'alerte ${alert.id}`}
-                  />
-                  
-                  {/* Alert Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
+              <CardContent className="px-4">
+                <div className="space-y-3">
+                  {/* Header avec checkbox et badges */}
+                  <div className="flex flex-col gap-4 items-start justify-between">
+                    <div className="flex items-start space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedAlerts.includes(alert.id)}
+                        onChange={() => handleSelectAlert(alert.id)}
+                        className="mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                        aria-label={`Sélectionner l'alerte ${alert.id}`}
+                      />
                       <div className="flex-1">
-                        {/* Header with Display Title */}
-                        <div className="flex items-center space-x-3 mb-2">
-                          <div>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                              {alert.category}
-                            </span>
-                          </div>
+                        {/* Badges en ligne */}
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {alert.category}
+                          </span>
                           <Badge className={getStatusColor(alert.status)}>
-                            {alert.status === 'active' ? 'Active' : 
+                            {alert.status === 'active' ? 'Active' :
                              alert.status === 'pending' ? 'En attente' :
                              alert.status === 'expired' ? 'Expirée' : 'Fausse alerte'}
                           </Badge>
@@ -404,81 +419,78 @@ export default function AlertsPage() {
                              alert.severity === 'high' ? 'Élevée' :
                              alert.severity === 'medium' ? 'Moyenne' : 'Faible'}
                           </Badge>
-                          <span className="text-sm text-gray-500">
-                            {getSourceIcon(alert.source)} {alert.source}
-                          </span>
-                          
-                          
                         </div>
-                        {/* titre */}
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{alert.displayTitle}</h3>
-                        </div>
-                        <div className="flex text-xs items-center space-x-2 mb-2 text-gray-400">
-                            {/* <MapPin className="h-4 w-4" /> */}
-                            <span>{alert.location.address}</span>
+                        {/* Titre */}
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-1">{alert.displayTitle}</h3>
+
+                        {/* Localisation */}
+                        <div className="flex items-center text-xs text-gray-500 mb-2">
+                          <span className="line-clamp-1">{alert.location.address}</span>
                         </div>
 
-                        {/* Category and Description */}
-                        <div className="mb-3">                         
-                          <p className="text-gray-700">{alert.description}</p>
+                        {/* Description tronquée */}
+                        <div className="mb-3">
+                          <p className="text-sm text-gray-700 line-clamp-2">{alert.description}</p>
                         </div>
 
-                        {/* Location and User Info */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                        
-                          <div className="flex items-center space-x-2">
-                            <User className="h-4 w-4" />
-                            <span>{alert.user?.phone || 'N/A'}</span>
-                            <span className="text-green-600">(Score: {alert.user?.reputationScore || 'N/A'})</span>
-                          </div>
+                        {/* Info utilisateur compacte */}
+                        <div className="flex items-center text-xs text-gray-600 mb-2">
+                          <User className="h-3 w-3 mr-1" />
+                          <span className="mr-2">{alert.user?.phone || 'N/A'}</span>
+                          <span className="text-green-600 text-xs">(Score: {alert.user?.reputationScore || 'N/A'})</span>
                         </div>
 
-                        {/* Confirmations and Time */}
-                        <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
-                          <div className="flex items-center space-x-1">
-                            <Users className="h-4 w-4" />
-                            <span>{alert.confirmations} confirmations</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-4 w-4" />
-                            <span>{formatTimeAgo(alert.createdAt)}</span>
-                          </div>
-                          {alert.expiresAt && (
-                            <div className="flex items-center space-x-1 text-orange-600">
-                              <AlertTriangle className="h-4 w-4" />
-                              <span>Expire dans {Math.floor((new Date(alert.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60))}h</span>
+                        {/* Métadonnées en ligne */}
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex items-center space-x-1">
+                              <Users className="h-3 w-3" />
+                              <span>{alert.confirmations}</span>
                             </div>
-                          )}
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>{formatTimeAgo(alert.createdAt)}</span>
+                            </div>
+                            {alert.expiresAt && (
+                              <div className="flex items-center space-x-1 text-orange-600">
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>{Math.floor((new Date(alert.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60))}h</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center text-xs text-gray-400">
+                            <span>{getSourceIcon(alert.source)}</span>
+                          </div>
                         </div>
                       </div>
+                    </div>
+                    {/* Actions en ligne séparée */}
+                    <div className="flex items-center space-x-1 pt-4 border-t">
 
-                      {/* Actions */}
-                      <div className="flex items-center space-x-2">
-                        <Button size="sm" variant="outline">
-                          <Eye className="h-4 w-4 mr-1" />
-                          Voir
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => handleEditAlert(alert)}
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Éditer
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <MessageSquare className="h-4 w-4 mr-1" />
-                          Commenter
-                        </Button>
-                        <Button size="sm" variant="outline">
-                          <Radio className="h-4 w-4 mr-1" />
-                          Diffuser
-                        </Button>
-                        <Button size="sm" variant="ghost">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {/*<Button size="sm" variant="outline" className="text-xs py-1 px-2">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Voir
+                      </Button>*/}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-1 px-2"
+                        onClick={() => handleEditAlert(alert)}
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                        Éditer
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs py-1 px-2">
+                        <MessageSquare className="h-3 w-3 mr-1" />
+                        Commentaires
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs py-1 px-2">
+                        <Radio className="h-3 w-3 mr-1" />
+                        Diffuser
+                      </Button>
+                      <Button size="sm" variant="ghost" className="text-xs py-1 px-1">
+                        <MoreHorizontal className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -486,7 +498,7 @@ export default function AlertsPage() {
             </Card>
           ))
         ) : (
-          <div className="text-center text-gray-500 py-12">
+          <div className="col-span-full text-center text-gray-500 py-12">
             <Search className="h-12 w-12 mx-auto mb-4" />
             <h3 className="text-lg font-semibold">Aucune alerte trouvée</h3>
             <p>Essayez de modifier vos filtres pour voir plus de résultats.</p>
@@ -495,7 +507,7 @@ export default function AlertsPage() {
         
         {/* Indicateur de chargement pour l'infinite scroll */}
         {loadingMore && (
-          <div className="flex items-center justify-center py-8">
+          <div className="col-span-full flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-red-600" />
             <span className="ml-2 text-gray-600">Chargement d&apos;autres alertes...</span>
           </div>
@@ -504,24 +516,78 @@ export default function AlertsPage() {
 
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
-        <div className="flex justify-center">
-          <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="text-sm text-gray-600">
+            Affichage de {((pagination.page - 1) * pagination.limit) + 1} à {Math.min(pagination.page * pagination.limit, pagination.total)} sur {pagination.total} alertes
+          </div>
+          <div className="flex space-x-2 items-center">
+            <Button
+              variant="outline"
               size="sm"
               disabled={pagination.page === 1}
               onClick={() => handlePageChange(pagination.page - 1)}
             >
               Précédent
             </Button>
-            {/* Generate page numbers logic here if needed */}
-            <Button 
-              variant="outline" 
+
+            {/* Numéros de pages */}
+            <div className="flex space-x-1">
+              {/* Première page */}
+              {pagination.page > 3 && (
+                <>
+                  <Button
+                    variant={pagination.page === 1 ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(1)}
+                  >
+                    1
+                  </Button>
+                  {pagination.page > 4 && <span className="px-2 text-gray-400">...</span>}
+                </>
+              )}
+
+              {/* Pages autour de la page actuelle */}
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                const pageNum = Math.max(1, Math.min(pagination.totalPages, pagination.page - 2 + i));
+                if (pageNum > pagination.totalPages) return null;
+                if (pagination.page > 3 && pageNum < pagination.page - 2) return null;
+                if (pagination.page < pagination.totalPages - 2 && pageNum > pagination.page + 2) return null;
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={pagination.page === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(pageNum)}
+                    className={pagination.page === pageNum ? "bg-red-600 hover:bg-red-700" : ""}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+
+              {/* Dernière page */}
+              {pagination.page < pagination.totalPages - 2 && (
+                <>
+                  {pagination.page < pagination.totalPages - 3 && <span className="px-2 text-gray-400">...</span>}
+                  <Button
+                    variant={pagination.page === pagination.totalPages ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                  >
+                    {pagination.totalPages}
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
               size="sm"
               disabled={pagination.page === pagination.totalPages}
               onClick={() => handlePageChange(pagination.page + 1)}
             >
-              Suivants
+              Suivant
             </Button>
           </div>
         </div>
@@ -541,7 +607,7 @@ export default function AlertsPage() {
   );
 }
 
-// Composant de formulaire d'édition
+// Composant de formulaire d'édition enrichi
 interface EditAlertFormProps {
   alert: Alert;
   onUpdate: (data: Partial<Alert>) => void;
@@ -557,7 +623,8 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
     location: {
       address: alert.location?.address || '',
       coordinates: alert.location?.coordinates || [0, 0]
-    }
+    },
+    categorySpecificFields: (alert as any).categorySpecificFields || null
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -565,7 +632,7 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
     onUpdate(formData);
   };
 
-  const handleChange = (field: string, value: string | number | [number, number]) => {
+  const handleChange = (field: string, value: any) => {
     if (field.startsWith('location.')) {
       const locationField = field.split('.')[1];
       setFormData(prev => ({
@@ -580,8 +647,321 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
     }
   };
 
+  const updateCategoryField = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      categorySpecificFields: prev.categorySpecificFields ? {
+        ...prev.categorySpecificFields,
+        [field]: value
+      } : null
+    }));
+  };
+
+  // Rendu des champs spécifiques selon la catégorie
+  const renderCategorySpecificFields = () => {
+    if (!formData.categorySpecificFields) return null;
+
+    const fields = formData.categorySpecificFields;
+
+    // Détection de la catégorie (simplifiée pour l'édition)
+    if (fields.person && fields.circumstances) {
+      // Disparition
+      return (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-sm">👤 Détails de la personne disparue</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label htmlFor="fullName">Nom complet</Label>
+              <Input
+                id="fullName"
+                value={fields.person?.fullName || ''}
+                onChange={(e) => updateCategoryField('person', { ...fields.person, fullName: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="age">Âge</Label>
+                <Input
+                  id="age"
+                  type="number"
+                  value={fields.person?.age || ''}
+                  onChange={(e) => updateCategoryField('person', { ...fields.person, age: parseInt(e.target.value) || 0 })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="gender">Genre</Label>
+                <Select
+                  value={fields.person?.gender || 'homme'}
+                  onValueChange={(value) => updateCategoryField('person', { ...fields.person, gender: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="homme">Homme</SelectItem>
+                    <SelectItem value="femme">Femme</SelectItem>
+                    <SelectItem value="enfant">Enfant</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="lastSeenLocation">Dernière localisation connue</Label>
+              <Input
+                id="lastSeenLocation"
+                value={fields.circumstances?.lastSeenLocation || ''}
+                onChange={(e) => updateCategoryField('circumstances', { ...fields.circumstances, lastSeenLocation: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="physicalDesc">Description physique</Label>
+              <Textarea
+                id="physicalDesc"
+                value={fields.physicalDescription?.distinguishingMarks || ''}
+                onChange={(e) => updateCategoryField('physicalDescription', { ...fields.physicalDescription, distinguishingMarks: e.target.value })}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
+            <div>
+              <Label htmlFor="clothingDesc">Vêtements portés</Label>
+              <Textarea
+                id="clothingDesc"
+                value={fields.lastClothing?.description || ''}
+                onChange={(e) => updateCategoryField('lastClothing', { ...fields.lastClothing, description: e.target.value })}
+                className="mt-1"
+                rows={2}
+              />
+            </div>
+            {fields.contactNumbers && (
+              <div>
+                <Label>Numéros de contact</Label>
+                <div className="mt-2 space-y-2">
+                  {fields.contactNumbers.map((contact: any, index: number) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        placeholder="Numéro"
+                        value={contact.phone}
+                        onChange={(e) => {
+                          const newContacts = [...fields.contactNumbers];
+                          newContacts[index] = { ...contact, phone: e.target.value };
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Propriétaire"
+                        value={contact.owner}
+                        onChange={(e) => {
+                          const newContacts = [...fields.contactNumbers];
+                          newContacts[index] = { ...contact, owner: e.target.value };
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newContacts = fields.contactNumbers.filter((_: any, i: number) => i !== index);
+                          updateCategoryField('contactNumbers', newContacts);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newContacts = [...(fields.contactNumbers || []), { phone: '', owner: '' }];
+                      updateCategoryField('contactNumbers', newContacts);
+                    }}
+                  >
+                    + Ajouter un numéro
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (fields.casualties && fields.trafficImpact) {
+      // Accident de circulation
+      return (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-sm">🚗 Détails de l&apos;accident</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="hasVictims"
+                checked={fields.casualties?.hasVictims || false}
+                onChange={(e) => updateCategoryField('casualties', { ...fields.casualties, hasVictims: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="hasVictims">Il y a des victimes</Label>
+            </div>
+            {fields.casualties?.hasVictims && (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label>Total victimes</Label>
+                  <Input
+                    type="number"
+                    value={fields.casualties.victimCount}
+                    onChange={(e) => updateCategoryField('casualties', { ...fields.casualties, victimCount: parseInt(e.target.value) || 0 })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Blessés graves</Label>
+                  <Input
+                    type="number"
+                    value={fields.casualties.serious}
+                    onChange={(e) => updateCategoryField('casualties', { ...fields.casualties, serious: parseInt(e.target.value) || 0 })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Décès</Label>
+                  <Input
+                    type="number"
+                    value={fields.casualties.deaths}
+                    onChange={(e) => updateCategoryField('casualties', { ...fields.casualties, deaths: parseInt(e.target.value) || 0 })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="roadBlocked"
+                checked={fields.trafficImpact?.roadBlocked || false}
+                onChange={(e) => updateCategoryField('trafficImpact', { ...fields.trafficImpact, roadBlocked: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="roadBlocked">Route bloquée</Label>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (fields.theftType && fields.weapon) {
+      // Vol/Cambriolage
+      return (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-sm">🥷 Détails de l&apos;incident</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label>Type d&apos;incident</Label>
+              <Select value={fields.theftType} onValueChange={(value) => updateCategoryField('theftType', value)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vol_main_armee">Vol à main armée</SelectItem>
+                  <SelectItem value="pickpocket">Pickpocket</SelectItem>
+                  <SelectItem value="vol_vehicule">Vol de véhicule</SelectItem>
+                  <SelectItem value="cambriolage_domicile">Cambriolage domicile</SelectItem>
+                  <SelectItem value="autre">Autre</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="weaponUsed"
+                checked={fields.weapon?.weaponUsed || false}
+                onChange={(e) => updateCategoryField('weapon', { ...fields.weapon, weaponUsed: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="weaponUsed">Arme utilisée</Label>
+            </div>
+            <div>
+              <Label>Nombre de suspects</Label>
+              <Input
+                type="number"
+                value={fields.suspects?.count || 1}
+                onChange={(e) => updateCategoryField('suspects', { ...fields.suspects, count: parseInt(e.target.value) || 1 })}
+                className="mt-1"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (fields.fireType && fields.extent) {
+      // Incendie
+      return (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-sm">🔥 Détails de l&apos;incendie</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label>Ampleur du feu</Label>
+              <Select value={fields.extent?.size} onValueChange={(value) => updateCategoryField('extent', { ...fields.extent, size: value })}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="petit">Petit</SelectItem>
+                  <SelectItem value="moyen">Moyen</SelectItem>
+                  <SelectItem value="grand">Grand</SelectItem>
+                  <SelectItem value="majeur">Majeur</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="fireVictims"
+                checked={fields.casualties?.hasVictims || false}
+                onChange={(e) => updateCategoryField('casualties', { ...fields.casualties, hasVictims: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="fireVictims">Il y a des victimes</Label>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Champs génériques pour autres catégories
+    return (
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-sm">📋 Détails spécifiques</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-gray-500">Champs spécifiques disponibles mais non affichés dans cette vue simplifiée.</p>
+          <pre className="mt-2 text-xs bg-gray-50 p-2 rounded overflow-auto max-h-32">
+            {JSON.stringify(fields, null, 2)}
+          </pre>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
       <div>
         <Label htmlFor="displayTitle">Titre d&apos;affichage</Label>
         <Input
@@ -606,17 +986,13 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <Label htmlFor="category">Catégorie</Label>
-          <Select value={formData.category} onValueChange={(value) => handleChange('category', value)}>
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Sélectionner une catégorie" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Accident de circulation">Accident de circulation</SelectItem>
-              <SelectItem value="Incendie">Incendie</SelectItem>
-              <SelectItem value="Inondation">Inondation</SelectItem>
-              <SelectItem value="Éboulement">Éboulement</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            id="category"
+            value={formData.category}
+            onChange={(e) => handleChange('category', e.target.value)}
+            className="mt-1"
+            disabled
+          />
         </div>
 
         <div>
@@ -660,7 +1036,10 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
         />
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
+      {/* Affichage des champs spécifiques */}
+      {renderCategorySpecificFields()}
+
+      <div className="flex justify-end space-x-2 pt-4 sticky bottom-0 bg-white border-t">
         <Button type="button" variant="outline" onClick={() => {}}>
           Annuler
         </Button>

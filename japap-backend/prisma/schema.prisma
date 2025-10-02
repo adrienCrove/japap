@@ -1,4 +1,3 @@
-// japap-backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,11 +11,16 @@ model User {
   id              String              @id @default(uuid())
   phone           String              @unique
   name            String?
+  email           String?
   gender          String?
   role            String              @default("user")
-  reputationScore Int                 @default(0)
+  status          String              @default("pending")
+  reputationScore Int                 @default(100)
   location        Json?
+  birthDate       DateTime?
+  notes           String?
   createdAt       DateTime            @default(now())
+  updatedAt       DateTime?           @updatedAt
   alerts          Alert[]
   confirmations   AlertConfirmation[]
   notifications   Notification[]
@@ -24,23 +28,24 @@ model User {
 }
 
 model Alert {
-  id            String              @id @default(uuid())
-  userId        String?
-  ref_alert_id  String
-  title         String
-  displayTitle  String
-  category      String
-  severity      String?
-  description   String?
-  location      Json?
-  source        String?
-  mediaUrl      String?
-  expiresAt     DateTime?
-  status        String              @default("active")
-  createdAt     DateTime            @default(now())
-  user          User?               @relation(fields: [userId], references: [id])
-  confirmedBy   AlertConfirmation[]
-  notifications Notification[]
+  id                     String              @id @default(uuid())
+  userId                 String?
+  category               String
+  severity               String?
+  description            String?
+  location               Json?
+  mediaUrl               String?
+  expiresAt              DateTime?
+  status                 String              @default("active")
+  createdAt              DateTime            @default(now())
+  title                  String
+  displayTitle           String
+  ref_alert_id           String
+  source                 String?
+  categorySpecificFields Json?
+  user                   User?               @relation(fields: [userId], references: [id])
+  confirmedBy            AlertConfirmation[]
+  notifications          Notification[]
 }
 
 model AlertConfirmation {

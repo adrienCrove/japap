@@ -36,7 +36,7 @@ const Map = dynamic(() => import('@/components/map/LeafletMap'), {
 interface MapAlert {
   id: string;
   category: string;
-  severity: 'faible' | 'moyen' | 'elevé' | 'critique';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'active' | 'pending' | 'resolved';
   description: string;
   title: string;
@@ -191,7 +191,7 @@ export default function MapPage() {
       'false': 'resolved'
     };
 
-    return {
+      return {
       id: apiAlert.id,
       category: categoryMapping[apiAlert.category] || apiAlert.category,
       severity: severityMapping[apiAlert.severity] || 'medium',
@@ -430,7 +430,8 @@ export default function MapPage() {
       Math.pow(alertLat - regionLat, 2) + Math.pow(alertLng - regionLng, 2)
     );
     
-    const threshold = thresholds[regionId] || 120;
+    // Seuil de distance basé sur le zoom de la région (en degrés)
+    const threshold = region.zoom >= 9 ? 0.5 : 1.0;
     
     return distance <= threshold;
   }, [cameroonRegions]);
@@ -448,7 +449,7 @@ export default function MapPage() {
         markers.push({
             id: 'search-result',
             category: 'Résultat de recherche',
-            severity: 'faible',
+            severity: 'low',
             status: 'resolved', // to give it a neutral look
             title: 'Lieu recherché',
             description: searchedLocation.address,
@@ -468,7 +469,7 @@ export default function MapPage() {
       <div className="w-[400px] border-r border-gray-200 bg-white flex flex-col">
         <Breadcrumb />
         
-        {/* Region Selector */}
+        {/* Region Selector 
         <div className="p-4 border-b">
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700 flex items-center">
@@ -489,7 +490,7 @@ export default function MapPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+        </div>*/}
         
          {/*
         <div className="p-4 border-b">
