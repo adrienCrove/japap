@@ -92,3 +92,50 @@ model MessageBot {
   alertCreated        Boolean  @default(false)
   createdAt           DateTime @default(now())
 }
+
+model MonitoredSource {
+  id             String   @id @default(uuid())
+  name           String
+  url            String
+  sourceType     String   @default("social")  // 'social' | 'website' | 'rss' | 'api'
+  platform       String   // 'whatsapp' | 'telegram' | 'facebook' | 'website' | 'rss-feed'
+  scrapingConfig Json?    // Configuration flexible pour chaque type
+  isActive       Boolean  @default(true)
+  lastScraped    DateTime?
+  contentCount   Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([sourceType, isActive])
+  @@map("social_links")  // Garder le nom de table pour éviter migration complexe
+}
+
+model BroadcastChannel {
+  id                String             @id @default(uuid())
+  name              String             // Ex: "Canal WhatsApp JAPAP", "JAPAP Telegram Official"
+  platform          String             // 'whatsapp' | 'telegram' | 'instagram'
+  credentials       Json               // Token, Channel ID, Username selon plateforme
+  isActive          Boolean            @default(true)
+  followerCount     Int?               // Nombre d'abonnés (optionnel)
+  lastBroadcast     DateTime?          // Date dernière diffusion
+  broadcastCount    Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  broadcasts        BroadcastLog[]
+
+  @@index([platform, isActive])
+}
+
+model BroadcastLog {
+  id          String           @id @default(uuid())
+  channelId   String
+  alertId     String
+  status      String           @default("pending")  // 'pending' | 'sent' | 'failed'
+  message     String?          // Message formaté envoyé
+  response    Json?            // Réponse de l'API (ID message, erreurs, etc.)
+  sentAt      DateTime         @default(now())
+  channel     BroadcastChannel @relation(fields: [channelId], references: [id])
+
+  @@index([alertId, status])
+  @@index([channelId, sentAt])
+}

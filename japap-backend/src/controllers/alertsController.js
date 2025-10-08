@@ -126,3 +126,108 @@ exports.getAllAlerts = async (req, res) => {
         });
     }
 }
+
+// GET /api/alerts/:id
+exports.getAlertById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const alert = await prisma.alert.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        if (!alert) {
+            return res.status(404).json({
+                success: false,
+                error: 'Alerte non trouvée'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: alert
+        });
+    } catch (error) {
+        console.error('Erreur lors de la récupération de l\'alerte:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Une erreur est survenue lors de la récupération de l\'alerte.'
+        });
+    }
+}
+
+// PUT /api/alerts/:id
+exports.updateAlert = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const {
+            displayTitle,
+            description,
+            severity,
+            status,
+            location,
+            mediaUrl,
+            categorySpecificFields
+        } = req.body;
+
+        // Vérifier que l'alerte existe
+        const existingAlert = await prisma.alert.findUnique({
+            where: { id }
+        });
+
+        if (!existingAlert) {
+            return res.status(404).json({
+                success: false,
+                error: 'Alerte non trouvée'
+            });
+        }
+
+        // Préparer les données à mettre à jour
+        const updateData = {};
+        if (displayTitle !== undefined) updateData.displayTitle = displayTitle;
+        if (description !== undefined) updateData.description = description;
+        if (severity !== undefined) updateData.severity = severity;
+        if (status !== undefined) updateData.status = status;
+        if (location !== undefined) updateData.location = location;
+        if (mediaUrl !== undefined) updateData.mediaUrl = mediaUrl;
+        if (categorySpecificFields !== undefined) updateData.categorySpecificFields = categorySpecificFields;
+
+        // Mettre à jour l'alerte
+        const updatedAlert = await prisma.alert.update({
+            where: { id },
+            data: updateData,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        phone: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            data: updatedAlert,
+            message: 'Alerte mise à jour avec succès'
+        });
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de l\'alerte:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Une erreur est survenue lors de la mise à jour de l\'alerte.'
+        });
+    }
+}
