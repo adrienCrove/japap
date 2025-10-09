@@ -1,8 +1,10 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import * as SplashScreenExpo from 'expo-splash-screen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFonts } from 'expo-font';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreen from '@/components/SplashScreen';
@@ -10,14 +12,20 @@ import SplashScreen from '@/components/SplashScreen';
 // Empêcher le splashscreen natif de se cacher automatiquement
 SplashScreenExpo.preventAutoHideAsync();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
+  // Charger les polices personnalisées
+  const [fontsLoaded] = useFonts({
+    'Lato': require('../assets/fonts/Lato-Regular.ttf'),
+    'Lato-Bold': require('../assets/fonts/Lato-Bold.ttf'),
+  });
+
+  // Étape 1: Splash + vérification AsyncStorage
   useEffect(() => {
     async function prepare() {
       try {
@@ -26,8 +34,23 @@ export default function RootLayout() {
 
         // Attendre 4 secondes pour afficher notre custom splash
         await new Promise(resolve => setTimeout(resolve, 4000));
+
+        // DEV ONLY: Décommenter pour toujours afficher l'onboarding
+        await AsyncStorage.removeItem('onboarding_seen');
+
+        // Vérifier si l'onboarding a déjà été vu
+        const onboardingSeen = await AsyncStorage.getItem('onboarding_seen');
+
+        // Déterminer la route initiale
+        if (onboardingSeen === 'true') {
+          setInitialRoute('/(tabs)');
+        } else {
+          setInitialRoute('/onboarding');
+        }
       } catch (e) {
         console.warn(e);
+        // En cas d'erreur, aller vers onboarding par défaut
+        setInitialRoute('/onboarding');
       } finally {
         setIsReady(true);
       }
@@ -36,13 +59,21 @@ export default function RootLayout() {
     prepare();
   }, []);
 
-  if (!isReady) {
+  // Étape 2: Navigation une fois que tout est prêt
+  useEffect(() => {
+    if (isReady && initialRoute && fontsLoaded) {
+      router.replace(initialRoute);
+    }
+  }, [isReady, initialRoute, fontsLoaded, router]);
+
+  if (!isReady || !fontsLoaded) {
     return <SplashScreen />;
   }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
