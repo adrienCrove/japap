@@ -8,6 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export default function OnboardingScreen() {
   const router = useRouter();
 
+  const handleCreateAccount = () => {
+    router.push('/auth/login');
+  };
   const handleConsulter = async () => {
     try {
       // Marquer l'onboarding comme vu
@@ -60,12 +63,12 @@ export default function OnboardingScreen() {
         {/* Boutons */}
         <View style={styles.buttonsContainer}>
           {/* Bouton Créer compte (désactivé) */}
-          <TouchableOpacity style={[styles.primaryButton, styles.disabledButton]} disabled>
-            <Text style={styles.primaryButtonText}>Créé votre compte gratuitement</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleCreateAccount}>
+            <Text style={styles.primaryButtonText}>Créer votre compte gratuitement</Text>
           </TouchableOpacity>
 
           {/* Bouton Se connecter (désactivé) */}
-          <TouchableOpacity style={[styles.secondaryButton, styles.disabledButton]} disabled>
+          <TouchableOpacity style={styles.secondaryButton} disabled>
             <Text style={styles.secondaryButtonText}>Se connecter</Text>
           </TouchableOpacity>
 

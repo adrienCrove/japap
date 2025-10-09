@@ -21,6 +21,7 @@ export default function RootLayout() {
 
   // Charger les polices personnalisées
   const [fontsLoaded] = useFonts({
+    'SUSE': require('../assets/fonts/SUSE-Variable.ttf'),
     'Lato': require('../assets/fonts/Lato-Regular.ttf'),
     'Lato-Bold': require('../assets/fonts/Lato-Bold.ttf'),
   });
@@ -62,7 +63,7 @@ export default function RootLayout() {
   // Étape 2: Navigation une fois que tout est prêt
   useEffect(() => {
     if (isReady && initialRoute && fontsLoaded) {
-      router.replace(initialRoute);
+      router.replace(initialRoute as any);
     }
   }, [isReady, initialRoute, fontsLoaded, router]);
 
@@ -74,6 +75,11 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/login" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="auth/signup" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="auth/phone-verify" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="auth/verify-code" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="auth/address" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
