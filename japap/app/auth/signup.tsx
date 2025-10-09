@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function SignupScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const params = useLocalSearchParams();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -21,7 +23,7 @@ export default function SignupScreen() {
   const handleContinue = () => {
     // Valider les champs
     if (!firstName.trim() || !lastName.trim()) {
-      alert('Veuillez remplir tous les champs');
+      showToast('Veuillez remplir tous les champs');
       return;
     }
 
@@ -50,9 +52,11 @@ export default function SignupScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 1/4 */}
+        {/* Barre de progression - Étape 1/6 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
+          <View style={styles.progressBarInactive} />
+          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />

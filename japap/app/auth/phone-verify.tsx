@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function PhoneVerifyScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const params = useLocalSearchParams();
   const [phone, setPhone] = useState('');
 
@@ -25,12 +27,12 @@ export default function PhoneVerifyScreen() {
     const cleanPhone = phone.replace(/\s/g, '');
 
     if (cleanPhone.length !== 9) {
-      alert('Le numéro doit contenir exactement 9 chiffres');
+      showToast('Le numéro doit contenir exactement 9 chiffres');
       return;
     }
 
     if (!cleanPhone.startsWith('6')) {
-      alert('Le numéro doit commencer par 6');
+      showToast('Le numéro doit commencer par 6');
       return;
     }
 
@@ -86,10 +88,12 @@ export default function PhoneVerifyScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 2/4 */}
+        {/* Barre de progression - Étape 2/6 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
+          <View style={styles.progressBarInactive} />
+          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
         </View>

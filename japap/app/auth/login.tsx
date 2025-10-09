@@ -4,9 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastContext';
+import { validateEmail } from '@/utils/validation';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -18,8 +21,21 @@ export default function LoginScreen() {
   };
 
   const handleContinue = () => {
-    // Naviguer vers la page de création de compte avec l'email/phone et mot de passe
     const userInput = isPhoneMode ? phone : email;
+
+    // Validation de l'email
+    if (!isPhoneMode && !validateEmail(email)) {
+      showToast('Veuillez entrer une adresse email valide');
+      return;
+    }
+
+    // Validation du password
+    if (!password.trim()) {
+      showToast('Veuillez entrer un mot de passe');
+      return;
+    }
+
+    // Naviguer vers la page de création de compte avec l'email/phone et mot de passe
     router.push({
       pathname: '/auth/signup',
       params: { userInput, isPhone: isPhoneMode, password }

@@ -8,16 +8,19 @@ import { useFonts } from 'expo-font';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreen from '@/components/SplashScreen';
+import { ToastProvider, useToast } from '@/contexts/ToastContext';
+import Toast from '@/components/Toast';
 
 // Empêcher le splashscreen natif de se cacher automatiquement
 SplashScreenExpo.preventAutoHideAsync();
 
-export default function RootLayout() {
+function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
   const [isReady, setIsReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
+  const { toastState, hideToast } = useToast();
 
   // Charger les polices personnalisées
   const [fontsLoaded] = useFonts({
@@ -79,11 +82,27 @@ export default function RootLayout() {
         <Stack.Screen name="auth/signup" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="auth/phone-verify" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="auth/verify-code" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="auth/verification-loading" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="auth/address" options={{ headerShown: false, presentation: 'card' }} />
+        <Stack.Screen name="auth/interests" options={{ headerShown: false, presentation: 'card' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
+      <Toast
+        visible={toastState.visible}
+        message={toastState.message}
+        type={toastState.type}
+        onClose={hideToast}
+      />
       <StatusBar style="auto" />
     </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ToastProvider>
+      <RootLayoutNav />
+    </ToastProvider>
   );
 }

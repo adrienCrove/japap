@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const params = useLocalSearchParams();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
@@ -62,7 +64,7 @@ export default function VerifyCodeScreen() {
     const fullCode = code.join('');
 
     if (fullCode.length !== 6) {
-      alert('Veuillez entrer le code complet');
+      showToast('Veuillez entrer le code complet');
       return;
     }
 
@@ -72,9 +74,9 @@ export default function VerifyCodeScreen() {
     // Fermer le clavier avant la navigation
     Keyboard.dismiss();
 
-    // Naviguer vers la page d'adresse
+    // Naviguer vers la page de vérification
     router.push({
-      pathname: '/auth/address',
+      pathname: '/auth/verification-loading',
       params: {
         userInput,
         firstName,
@@ -110,11 +112,13 @@ export default function VerifyCodeScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 3/4 */}
+        {/* Barre de progression - Étape 3/6 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
+          <View style={styles.progressBarInactive} />
+          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
         </View>
       </View>

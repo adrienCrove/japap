@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useToast } from '@/contexts/ToastContext';
 
 export default function AddressScreen() {
   const router = useRouter();
+  const { showToast } = useToast();
   const params = useLocalSearchParams();
   const [address, setAddress] = useState('');
 
@@ -23,7 +25,7 @@ export default function AddressScreen() {
 
   const handleFinish = async () => {
     if (!address.trim()) {
-      alert('Veuillez entrer une adresse');
+      showToast('Veuillez entrer une adresse');
       return;
     }
 
@@ -45,8 +47,18 @@ export default function AddressScreen() {
     // Fermer le clavier avant la navigation
     Keyboard.dismiss();
 
-    // Naviguer vers l'application principale
-    router.replace('/(tabs)');
+    // Naviguer vers la page des centres d'intérêt
+    router.push({
+      pathname: '/auth/interests',
+      params: {
+        userInput,
+        firstName,
+        lastName,
+        password,
+        phone,
+        address: address.trim()
+      }
+    });
   };
 
   return (
@@ -59,12 +71,14 @@ export default function AddressScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 4/4 */}
+        {/* Barre de progression - Étape 5/6 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
+          <View style={styles.progressBarActive} />
+          <View style={styles.progressBarInactive} />
         </View>
       </View>
 
