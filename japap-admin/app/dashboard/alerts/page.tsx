@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,8 +41,17 @@ import {
 import Breadcrumb from '@/components/layout/Breadcrumb';
 
 const PAGE_LIMIT = 10;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+interface BroadcastChannel {
+  id: string;
+  name: string;
+  platform: string;
+  isActive: boolean;
+}
 
 export default function AlertsPage() {
+  const router = useRouter();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +59,11 @@ export default function AlertsPage() {
   const [selectedAlerts, setSelectedAlerts] = useState<string[]>([]);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [broadcastDialogOpen, setBroadcastDialogOpen] = useState(false);
+  const [selectedAlertForBroadcast, setSelectedAlertForBroadcast] = useState<string | null>(null);
+  const [broadcastChannels, setBroadcastChannels] = useState<BroadcastChannel[]>([]);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [broadcasting, setBroadcasting] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [filters, setFilters] = useState<AlertsFilters>({
     search: '',
@@ -162,12 +177,17 @@ export default function AlertsPage() {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
-    if (diffHours > 0) {
-      return `Il y a ${diffHours}h ${diffMinutes}min`;
+    if (diffDays > 30) {
+      return `Créé le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    } else if (diffDays >= 1) {
+      return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+    } else if (diffHours >= 1) {
+      return `Il y a ${diffHours}h`;
     } else {
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
       return `Il y a ${diffMinutes}min`;
     }
   };
@@ -203,7 +223,7 @@ export default function AlertsPage() {
     if (!editingAlert) return;
 
     const promise = updateAlert(editingAlert.id, updatedData);
-    
+
     toast.promise(promise, {
       loading: 'Mise à jour en cours...',
       success: () => {
@@ -214,6 +234,66 @@ export default function AlertsPage() {
       },
       error: (err) => `Erreur lors de la mise à jour : ${err.toString()}`,
     });
+  };
+
+  const handleBroadcastAlert = async (alertId: string) => {
+    setSelectedAlertForBroadcast(alertId);
+
+    // Charger les canaux disponibles
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/broadcast-channels?isActive=true`);
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        setBroadcastChannels(data.data);
+        setBroadcastDialogOpen(true);
+      } else {
+        toast.error('Impossible de charger les canaux');
+      }
+    } catch (error) {
+      console.error('Error loading channels:', error);
+      toast.error('Erreur lors du chargement des canaux');
+    }
+  };
+
+  const confirmBroadcast = async () => {
+    if (!selectedAlertForBroadcast || selectedChannels.length === 0) {
+      toast.error('Veuillez sélectionner au moins un canal');
+      return;
+    }
+
+    setBroadcasting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/broadcast/alert/${selectedAlertForBroadcast}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelIds: selectedChannels })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(data.message || 'Diffusion réussie');
+        setBroadcastDialogOpen(false);
+        setSelectedChannels([]);
+        setSelectedAlertForBroadcast(null);
+      } else {
+        toast.error(data.error || 'Erreur lors de la diffusion');
+      }
+    } catch (error) {
+      console.error('Error broadcasting alert:', error);
+      toast.error('Erreur lors de la diffusion');
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
+  const toggleChannelSelection = (channelId: string) => {
+    setSelectedChannels(prev =>
+      prev.includes(channelId)
+        ? prev.filter(id => id !== channelId)
+        : [...prev, channelId]
+    );
   };
 
   return (
@@ -421,7 +501,7 @@ export default function AlertsPage() {
                           </Badge>
                         </div>
                         {/* Titre */}
-                        <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-1">{alert.displayTitle}</h3>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1 line-clamp-1">{alert.title}</h3>
 
                         {/* Localisation */}
                         <div className="flex items-center text-xs text-gray-500 mb-2">
@@ -443,10 +523,10 @@ export default function AlertsPage() {
                         {/* Métadonnées en ligne */}
                         <div className="flex items-center justify-between text-xs text-gray-500">
                           <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-1">
+                            {/*<div className="flex items-center space-x-1">
                               <Users className="h-3 w-3" />
                               <span>{alert.confirmations}</span>
-                            </div>
+                            </div>*/}
                             <div className="flex items-center space-x-1">
                               <Clock className="h-3 w-3" />
                               <span>{formatTimeAgo(alert.createdAt)}</span>
@@ -466,11 +546,6 @@ export default function AlertsPage() {
                     </div>
                     {/* Actions en ligne séparée */}
                     <div className="flex items-center space-x-1 pt-4 border-t">
-
-                      {/*<Button size="sm" variant="outline" className="text-xs py-1 px-2">
-                        <Eye className="h-3 w-3 mr-1" />
-                        Voir
-                      </Button>*/}
                       <Button
                         size="sm"
                         variant="outline"
@@ -478,18 +553,25 @@ export default function AlertsPage() {
                         onClick={() => handleEditAlert(alert)}
                       >
                         <Edit className="h-3 w-3 mr-1" />
-                        Éditer
+                        Édition rapide
                       </Button>
-                      <Button size="sm" variant="outline" className="text-xs py-1 px-2">
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        Commentaires
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-1 px-2"
+                        onClick={() => router.push(`/dashboard/alerts/${alert.id}/edit`)}
+                      >
+                        <Edit className="h-3 w-3 mr-1" />
+                        Édition complète
                       </Button>
-                      <Button size="sm" variant="outline" className="text-xs py-1 px-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs py-1 px-2 bg-green-50 hover:bg-green-100"
+                        onClick={() => handleBroadcastAlert(alert.id)}
+                      >
                         <Radio className="h-3 w-3 mr-1" />
                         Diffuser
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-xs py-1 px-1">
-                        <MoreHorizontal className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
@@ -555,7 +637,7 @@ export default function AlertsPage() {
 
                 return (
                   <Button
-                    key={pageNum}
+                    key={`page-${pageNum}-${i}`}
                     variant={pagination.page === pageNum ? "default" : "outline"}
                     size="sm"
                     onClick={() => handlePageChange(pageNum)}
@@ -593,14 +675,88 @@ export default function AlertsPage() {
         </div>
       )}
 
-      {/* Modale d'édition */}
+      {/* Modale d'édition rapide */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogClose onClose={() => setEditDialogOpen(false)} />
           <DialogHeader>
-            <DialogTitle>Modifier l&apos;alerte</DialogTitle>
+            <DialogTitle>Édition Rapide</DialogTitle>
           </DialogHeader>
           {editingAlert && <EditAlertForm alert={editingAlert} onUpdate={handleUpdateAlert} />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modale de diffusion */}
+      <Dialog open={broadcastDialogOpen} onOpenChange={setBroadcastDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Diffuser l&apos;alerte</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Sélectionnez les canaux sur lesquels vous souhaitez diffuser cette alerte:
+            </p>
+
+            {broadcastChannels.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>Aucun canal actif disponible.</p>
+                <p className="text-xs mt-2">Configurez des canaux dans la section Diffusion.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {broadcastChannels.map((channel) => (
+                  <div
+                    key={channel.id}
+                    className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    onClick={() => toggleChannelSelection(channel.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedChannels.includes(channel.id)}
+                      onChange={() => toggleChannelSelection(channel.id)}
+                      className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{channel.name}</p>
+                      <p className="text-xs text-gray-500 capitalize">{channel.platform}</p>
+                    </div>
+                    <Badge variant={channel.isActive ? "default" : "secondary"}>
+                      {channel.isActive ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setBroadcastDialogOpen(false);
+                  setSelectedChannels([]);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                className="bg-green-600 hover:bg-green-700"
+                onClick={confirmBroadcast}
+                disabled={broadcasting || selectedChannels.length === 0}
+              >
+                {broadcasting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Diffusion...
+                  </>
+                ) : (
+                  <>
+                    <Radio className="h-4 w-4 mr-2" />
+                    Diffuser sur {selectedChannels.length} canal{selectedChannels.length > 1 ? 'x' : ''}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
