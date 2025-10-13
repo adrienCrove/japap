@@ -12,6 +12,7 @@ model User {
   phone           String              @unique
   name            String?
   email           String?
+  password        String? // Mot de passe hashé (optionnel pour OAuth)
   gender          String?
   role            String              @default("user")
   status          String              @default("pending")
@@ -25,6 +26,7 @@ model User {
   confirmations   AlertConfirmation[]
   notifications   Notification[]
   subscriptions   Subscription[]
+  userInterests   UserInterest[] // Relation vers les intérêts de l'utilisateur
 }
 
 model Alert {
@@ -94,48 +96,71 @@ model MessageBot {
 }
 
 model MonitoredSource {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   name           String
   url            String
-  sourceType     String   @default("social")  // 'social' | 'website' | 'rss' | 'api'
-  platform       String   // 'whatsapp' | 'telegram' | 'facebook' | 'website' | 'rss-feed'
-  scrapingConfig Json?    // Configuration flexible pour chaque type
-  isActive       Boolean  @default(true)
+  sourceType     String    @default("social") // 'social' | 'website' | 'rss' | 'api'
+  platform       String // 'whatsapp' | 'telegram' | 'facebook' | 'website' | 'rss-feed'
+  scrapingConfig Json? // Configuration flexible pour chaque type
+  isActive       Boolean   @default(true)
   lastScraped    DateTime?
-  contentCount   Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  contentCount   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([sourceType, isActive])
-  @@map("social_links")  // Garder le nom de table pour éviter migration complexe
+  @@map("social_links") // Garder le nom de table pour éviter migration complexe
 }
 
 model BroadcastChannel {
-  id                String             @id @default(uuid())
-  name              String             // Ex: "Canal WhatsApp JAPAP", "JAPAP Telegram Official"
-  platform          String             // 'whatsapp' | 'telegram' | 'instagram'
-  credentials       Json               // Token, Channel ID, Username selon plateforme
-  isActive          Boolean            @default(true)
-  followerCount     Int?               // Nombre d'abonnés (optionnel)
-  lastBroadcast     DateTime?          // Date dernière diffusion
-  broadcastCount    Int                @default(0)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  broadcasts        BroadcastLog[]
+  id             String         @id @default(uuid())
+  name           String // Ex: "Canal WhatsApp JAPAP", "JAPAP Telegram Official"
+  platform       String // 'whatsapp' | 'telegram' | 'instagram'
+  credentials    Json // Token, Channel ID, Username selon plateforme
+  isActive       Boolean        @default(true)
+  followerCount  Int? // Nombre d'abonnés (optionnel)
+  lastBroadcast  DateTime? // Date dernière diffusion
+  broadcastCount Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  broadcasts     BroadcastLog[]
 
   @@index([platform, isActive])
 }
 
 model BroadcastLog {
-  id          String           @id @default(uuid())
-  channelId   String
-  alertId     String
-  status      String           @default("pending")  // 'pending' | 'sent' | 'failed'
-  message     String?          // Message formaté envoyé
-  response    Json?            // Réponse de l'API (ID message, erreurs, etc.)
-  sentAt      DateTime         @default(now())
-  channel     BroadcastChannel @relation(fields: [channelId], references: [id])
+  id        String           @id @default(uuid())
+  channelId String
+  alertId   String
+  status    String           @default("pending") // 'pending' | 'sent' | 'failed'
+  message   String? // Message formaté envoyé
+  response  Json? // Réponse de l'API (ID message, erreurs, etc.)
+  sentAt    DateTime         @default(now())
+  channel   BroadcastChannel @relation(fields: [channelId], references: [id])
 
   @@index([alertId, status])
   @@index([channelId, sentAt])
+}
+
+model Interest {
+  id            String         @id @default(uuid())
+  label         String         @unique // "Alertes de sécurité à proximité"
+  code          String         @unique // "nearby_alerts"
+  description   String?
+  createdAt     DateTime       @default(now())
+  userInterests UserInterest[]
+}
+
+model UserInterest {
+  id         String   @id @default(uuid())
+  userId     String
+  interestId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
 }

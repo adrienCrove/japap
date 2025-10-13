@@ -1,4 +1,5 @@
 const prisma = require('../config/prismaClient');
+const bcrypt = require('bcryptjs');
 
 // POST /api/users - Créer un nouvel utilisateur
 exports.createUser = async (req, res) => {
@@ -7,6 +8,7 @@ exports.createUser = async (req, res) => {
       name,
       phone,
       email,
+      password,
       gender,
       role = 'user',
       status = 'active',
@@ -67,12 +69,19 @@ exports.createUser = async (req, res) => {
       });
     }
 
+    // Hasher le mot de passe si fourni
+    let hashedPassword = null;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
     // Créer l'utilisateur
     const user = await prisma.user.create({
       data: {
         name,
         phone: cleanedPhone,
         email,
+        password: hashedPassword,
         gender,
         role,
         status,
@@ -228,6 +237,7 @@ exports.updateUser = async (req, res) => {
       name,
       phone,
       email,
+      password,
       gender,
       role,
       status,
@@ -293,6 +303,9 @@ exports.updateUser = async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone.replace(/\s/g, '');
     if (email !== undefined) updateData.email = email;
+    if (password !== undefined && password !== null && password !== '') {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
     if (gender !== undefined) updateData.gender = gender;
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
@@ -459,6 +472,63 @@ exports.updateUserReputation = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la mise à jour du score de réputation',
+      details: error.message
+    });
+  }
+};
+
+// PATCH /api/users/:id/password - Changer le mot de passe d'un utilisateur
+exports.updateUserPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    // Validation
+    if (!newPassword || newPassword.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Le nouveau mot de passe est requis'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Le mot de passe doit contenir au moins 6 caractères'
+      });
+    }
+
+    // Vérifier si l'utilisateur existe
+    const user = await prisma.user.findUnique({
+      where: { id }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'Utilisateur non trouvé'
+      });
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Mettre à jour le mot de passe
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword }
+    });
+
+    res.json({
+      success: true,
+      message: 'Mot de passe modifié avec succès'
+    });
+
+  } catch (error) {
+    console.error('Error updating user password:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erreur lors de la mise à jour du mot de passe',
       details: error.message
     });
   }

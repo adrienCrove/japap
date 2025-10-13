@@ -16,9 +16,8 @@ const socialLinksRoutes = require('./routes/socialLinks');
 const webhookRoutes = require('./routes/webhooks');
 const broadcastChannelsRoutes = require('./routes/broadcastChannels');
 const broadcastRoutes = require('./routes/broadcast');
-
-// Si vous avez d'autres routes, importez-les ici
-// const authRoutes = require('./routes/authRoutes');
+const authRoutes = require('./routes/authRoutes');
+const interestsRoutes = require('./routes/interests');
 
 // Middlewares
 app.use(cors()); // Activer CORS pour toutes les routes
@@ -32,16 +31,17 @@ app.use('/api/social-links', socialLinksRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/broadcast-channels', broadcastChannelsRoutes);
 app.use('/api/broadcast', broadcastRoutes);
-
-// app.use('/api/auth', authRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/interests', interestsRoutes);
 
 
 app.get('/', (req, res) => {
   res.send('Japap Backend is running!');
 });
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`🚀 Japap Backend listening on http://localhost:${port}`);
+  console.log(`📱 Mobile app can connect via: http://192.168.1.64:${port}`);
 
   // Initialiser le bot Telegram
   telegramBotService.initialize();
