@@ -19,7 +19,8 @@ import {
   Star,
   UserPlus,
   Mail,
-  Calendar
+  Calendar,
+  Lock
 } from 'lucide-react';
 import Breadcrumb from '@/components/layout/Breadcrumb';
 import { createUser } from '@/lib/api';
@@ -28,6 +29,8 @@ interface UserFormData {
   name: string;
   phone: string;
   email?: string;
+  password: string;
+  confirmPassword: string;
   gender?: 'male' | 'female' | 'other';
   role: 'user' | 'moderator' | 'admin';
   status: 'active' | 'pending' | 'suspended' | 'blocked';
@@ -43,6 +46,8 @@ export default function CreateUserPage() {
     name: '',
     phone: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     gender: undefined,
     role: 'user',
     status: 'active',
@@ -79,6 +84,21 @@ export default function CreateUserPage() {
       return;
     }
 
+    if (!formData.password.trim()) {
+      toast.error('Le mot de passe est requis');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Les mots de passe ne correspondent pas');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -86,6 +106,7 @@ export default function CreateUserPage() {
         name: formData.name,
         phone: formData.phone.replace(/\s/g, ''),
         email: formData.email || undefined,
+        password: formData.password,
         gender: formData.gender,
         role: formData.role,
         status: formData.status,
@@ -223,6 +244,43 @@ export default function CreateUserPage() {
                     <SelectItem value="other">Autre</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="password">Mot de passe *</Label>
+                <div className="relative mt-1">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Minimum 6 caractères"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Le mot de passe doit contenir au moins 6 caractères
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="confirmPassword">Confirmer le mot de passe *</Label>
+                <div className="relative mt-1">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirmer le mot de passe"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    className="pl-10"
+                    required
+                  />
+                </div>
               </div>
             </div>
 

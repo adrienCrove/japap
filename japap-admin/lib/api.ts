@@ -134,15 +134,37 @@ export interface UserData {
 
 export type UserCreationData = Omit<UserData, 'id' | 'createdAt'>;
 
+// Gestion du token JWT
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('japap_admin_token');
+}
+
+export function setToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('japap_admin_token', token);
+}
+
+export function removeToken(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('japap_admin_token');
+}
+
 // Fonctions API (génériques)
 async function fetchApi<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   try {
+    const token = getToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        // 'Authorization': `Bearer ${getToken()}` // TODO: Implémenter la gestion du token
-        ...options.headers,
-      },
+      headers,
       ...options,
     });
     
@@ -320,4 +342,104 @@ export function handleApiError(error: any): string {
     return error.message;
   }
   return 'Une erreur inattendue s\'est produite';
+}
+
+// Fonctions d'authentification
+export interface LoginCredentials {
+  emailOrPhone: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  token?: string;
+  user?: {
+    id: string;
+    name?: string;
+    email?: string;
+    phone: string;
+    role: 'user' | 'moderator' | 'admin';
+  };
+  error?: string;
+  message?: string;
+}
+
+export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Erreur lors de la connexion'
+      };
+    }
+
+    // Sauvegarder le token
+    if (data.token) {
+      setToken(data.token);
+    }
+
+    return {
+      success: true,
+      token: data.token,
+      user: data.user,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Error logging in:', error);
+    return {
+      success: false,
+      error: handleApiError(error)
+    };
+  }
+}
+
+export function logout(): void {
+  removeToken();
+}
+
+export async function getCurrentUser(): Promise<ApiResponse<any>> {
+  const token = getToken();
+  if (!token) {
+    return {
+      success: false,
+      error: 'Non authentifié'
+    };
+  }
+
+  // Décoder le token JWT pour récupérer les informations utilisateur
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return {
+      success: true,
+      data: {
+        userId: payload.userId,
+        phone: payload.phone,
+        role: payload.role,
+        email: payload.email
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: 'Token invalide'
+    };
+  }
+}
+
+// Fonction pour mettre à jour le mot de passe
+export async function updateUserPassword(userId: string, newPassword: string): Promise<ApiResponse<void>> {
+  return fetchApi<void>(`${API_BASE_URL}/api/users/${userId}/password`, {
+    method: 'PATCH',
+    body: JSON.stringify({ newPassword }),
+  });
 }

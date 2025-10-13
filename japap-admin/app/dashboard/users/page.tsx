@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { fetchUsers, updateUserStatus, updateUserRole, updateUser, fetchUserDetails } from '@/lib/api';
+import { fetchUsers, updateUserStatus, updateUserRole, updateUser, fetchUserDetails, updateUserPassword } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -323,16 +323,26 @@ export default function UsersPage() {
       toast.error('Les mots de passe ne correspondent pas');
       return;
     }
-    if (newPassword.length < 8) {
-      toast.error('Le mot de passe doit contenir au moins 8 caractères');
+    if (newPassword.length < 6) {
+      toast.error('Le mot de passe doit contenir au moins 6 caractères');
       return;
     }
 
-    toast.success(`Mot de passe mis à jour pour ${userToEdit.name || userToEdit.phone}`);
-    setPasswordDialogOpen(false);
-    setNewPassword('');
-    setConfirmPassword('');
-    // TODO: Implémenter l'appel API pour changer le mot de passe
+    const promise = updateUserPassword(userToEdit.id, newPassword);
+
+    toast.promise(promise, {
+      loading: 'Modification du mot de passe...',
+      success: () => {
+        setPasswordDialogOpen(false);
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordStrength(0);
+        return `Mot de passe modifié pour ${userToEdit.name || userToEdit.phone}`;
+      },
+      error: (err) => {
+        return err.error || 'Erreur lors de la modification du mot de passe';
+      },
+    });
   };
 
   const handleUpdateStatus = async () => {

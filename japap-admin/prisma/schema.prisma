@@ -1,13 +1,5 @@
-generator client_admin {
+generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
-  name     = "admin"
-}
-
-generator client_backend {
-  provider = "prisma-client-js"
-  output   = "../../../japap-backend/node_modules/.prisma/client"
-  name     = "backend"
 }
 
 datasource db {
@@ -19,34 +11,43 @@ model User {
   id              String              @id @default(uuid())
   phone           String              @unique
   name            String?
+  email           String?
+  password        String? // Mot de passe hashé (optionnel pour OAuth)
   gender          String?
   role            String              @default("user")
-  reputationScore Int                 @default(0)
+  status          String              @default("pending")
+  reputationScore Int                 @default(100)
   location        Json?
+  birthDate       DateTime?
+  notes           String?
   createdAt       DateTime            @default(now())
+  updatedAt       DateTime?           @updatedAt
   alerts          Alert[]
   confirmations   AlertConfirmation[]
   notifications   Notification[]
   subscriptions   Subscription[]
+  userInterests   UserInterest[] // Relation vers les intérêts de l'utilisateur
 }
 
 model Alert {
-  id            String              @id @default(uuid())
-  userId        String?
-  ref_alert_id  String?
-  title         String?
-  displayTitle  String?
-  category      String
-  severity      String?
-  description   String?
-  location      Json?
-  mediaUrl      String?
-  expiresAt     DateTime?
-  status        String              @default("active")
-  createdAt     DateTime            @default(now())
-  user          User?               @relation(fields: [userId], references: [id])
-  confirmedBy   AlertConfirmation[]
-  notifications Notification[]
+  id                     String              @id @default(uuid())
+  userId                 String?
+  category               String
+  severity               String?
+  description            String?
+  location               Json?
+  mediaUrl               String?
+  expiresAt              DateTime?
+  status                 String              @default("active")
+  createdAt              DateTime            @default(now())
+  title                  String
+  displayTitle           String
+  ref_alert_id           String
+  source                 String?
+  categorySpecificFields Json?
+  user                   User?               @relation(fields: [userId], references: [id])
+  confirmedBy            AlertConfirmation[]
+  notifications          Notification[]
 }
 
 model AlertConfirmation {
@@ -92,4 +93,74 @@ model MessageBot {
   interpretedSeverity String?
   alertCreated        Boolean  @default(false)
   createdAt           DateTime @default(now())
+}
+
+model MonitoredSource {
+  id             String    @id @default(uuid())
+  name           String
+  url            String
+  sourceType     String    @default("social") // 'social' | 'website' | 'rss' | 'api'
+  platform       String // 'whatsapp' | 'telegram' | 'facebook' | 'website' | 'rss-feed'
+  scrapingConfig Json? // Configuration flexible pour chaque type
+  isActive       Boolean   @default(true)
+  lastScraped    DateTime?
+  contentCount   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([sourceType, isActive])
+  @@map("social_links") // Garder le nom de table pour éviter migration complexe
+}
+
+model BroadcastChannel {
+  id             String         @id @default(uuid())
+  name           String // Ex: "Canal WhatsApp JAPAP", "JAPAP Telegram Official"
+  platform       String // 'whatsapp' | 'telegram' | 'instagram'
+  credentials    Json // Token, Channel ID, Username selon plateforme
+  isActive       Boolean        @default(true)
+  followerCount  Int? // Nombre d'abonnés (optionnel)
+  lastBroadcast  DateTime? // Date dernière diffusion
+  broadcastCount Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  broadcasts     BroadcastLog[]
+
+  @@index([platform, isActive])
+}
+
+model BroadcastLog {
+  id        String           @id @default(uuid())
+  channelId String
+  alertId   String
+  status    String           @default("pending") // 'pending' | 'sent' | 'failed'
+  message   String? // Message formaté envoyé
+  response  Json? // Réponse de l'API (ID message, erreurs, etc.)
+  sentAt    DateTime         @default(now())
+  channel   BroadcastChannel @relation(fields: [channelId], references: [id])
+
+  @@index([alertId, status])
+  @@index([channelId, sentAt])
+}
+
+model Interest {
+  id            String         @id @default(uuid())
+  label         String         @unique // "Alertes de sécurité à proximité"
+  code          String         @unique // "nearby_alerts"
+  description   String?
+  createdAt     DateTime       @default(now())
+  userInterests UserInterest[]
+}
+
+model UserInterest {
+  id         String   @id @default(uuid())
+  userId     String
+  interestId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
 }
