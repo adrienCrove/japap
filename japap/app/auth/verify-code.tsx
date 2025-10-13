@@ -10,7 +10,7 @@ export default function VerifyCodeScreen() {
   const router = useRouter();
   const { showToast } = useToast();
   const params = useLocalSearchParams();
-  const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState(['', '', '', '']);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
@@ -18,8 +18,7 @@ export default function VerifyCodeScreen() {
 
   // Récupérer les données des étapes précédentes
   const userInput = params.userInput as string || '';
-  const firstName = params.firstName as string || '';
-  const lastName = params.lastName as string || '';
+  const fullname = params.fullname as string || '';
   const password = params.password as string || '';
   const phone = params.phone as string || '';
 
@@ -63,7 +62,7 @@ export default function VerifyCodeScreen() {
   const handleVerify = () => {
     const fullCode = code.join('');
 
-    if (fullCode.length !== 6) {
+    if (fullCode.length !== 4) {
       showToast('Veuillez entrer le code complet');
       return;
     }
@@ -79,8 +78,7 @@ export default function VerifyCodeScreen() {
       pathname: '/auth/verification-loading',
       params: {
         userInput,
-        firstName,
-        lastName,
+        fullname,
         password,
         phone
       }
@@ -112,12 +110,10 @@ export default function VerifyCodeScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 3/6 */}
+        {/* Barre de progression - Étape 2/4 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
-          <View style={styles.progressBarActive} />
-          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
         </View>
@@ -199,25 +195,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   progressBarContainer: {
+    flex: 1,
     flexDirection: 'row',
     height: 4,
     gap: 8,
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
     borderRadius: 2,
   },
   progressBarInactive: {
@@ -252,13 +251,13 @@ const styles = StyleSheet.create({
   },
   codeContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginBottom: 32,
-    gap: 8,
+    gap: 12,
   },
   codeInput: {
-    flex: 1,
-    height: 56,
+    width: 64,
+    height: 64,
     borderWidth: 2,
     borderColor: '#CCC',
     borderRadius: 12,

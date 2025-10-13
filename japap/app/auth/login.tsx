@@ -5,22 +5,27 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from '@/contexts/ToastContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { validateEmail } from '@/utils/validation';
+import { checkUser } from '@/services/api';
+import LoadingModal from '@/components/LoadingModal';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isPhoneMode] = useState(false); // setIsPhoneMode commenté car toggle désactivé
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleClose = () => {
     router.back();
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     const userInput = isPhoneMode ? phone : email;
 
     // Validation de l'email
@@ -35,11 +40,48 @@ export default function LoginScreen() {
       return;
     }
 
-    // Naviguer vers la page de création de compte avec l'email/phone et mot de passe
-    router.push({
-      pathname: '/auth/signup',
-      params: { userInput, isPhone: isPhoneMode, password }
-    });
+    setIsLoading(true);
+
+    try {
+      // Vérifier si l'utilisateur existe
+      const checkResult = await checkUser(userInput);
+
+      if (!checkResult.success) {
+        showToast(checkResult.error || 'Erreur de connexion');
+        setIsLoading(false);
+        return;
+      }
+
+      // Si l'utilisateur existe, se connecter
+      if (checkResult.exists) {
+        const loginResult = await login(userInput, password);
+
+        if (loginResult.success) {
+          // Succès - rediriger vers l'accueil
+          setTimeout(() => {
+            setIsLoading(false);
+            router.replace('/(tabs)');
+          }, 1500);
+        } else {
+          setIsLoading(false);
+          showToast(loginResult.error || 'Erreur de connexion');
+        }
+      } else {
+        // L'utilisateur n'existe pas - continuer vers signup
+        setIsLoading(false);
+        router.push({
+          pathname: '/auth/signup',
+          params: {
+            userInput,
+            isPhone: isPhoneMode ? 'true' : 'false',
+            password
+          }
+        });
+      }
+    } catch (error: any) {
+      setIsLoading(false);
+      showToast(error.message || 'Erreur de connexion');
+    }
   };
 
   const togglePasswordVisibility = () => {
@@ -65,6 +107,9 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
+      {/* Modal de chargement */}
+      <LoadingModal visible={isLoading} message="Connexion en cours..." />
+
       {/* Bouton fermer */}
       <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
         <Ionicons name="close" size={32} color="#000" />
@@ -74,9 +119,9 @@ export default function LoginScreen() {
         {/* Titre */}
         <Text style={styles.title}>Créer un compte ou se connecter</Text>
 
-        {/* Texte légal */}
-        <View style={styles.legalContainer}>
-          <Text style={styles.legalText}>
+        {/* sous titre */}
+        <View style={styles.subtitleContainer}>
+          <Text style={styles.subtitleText}>
             Nous utiliserons cette information pour vous connecter ou créer un compte.
           </Text>
         </View>
@@ -179,13 +224,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#000',
-    marginBottom: 20,
+    marginBottom: 10,
     fontFamily: 'SUSE',
   },
-  legalContainer: {
+  subtitleContainer: {
     marginBottom: 28,
   },
-  legalText: {
+  subtitleText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 22,

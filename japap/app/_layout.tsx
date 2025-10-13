@@ -9,6 +9,7 @@ import { useFonts } from 'expo-font';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreen from '@/components/SplashScreen';
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
+import { AuthProvider } from '@/contexts/AuthContext';
 import Toast from '@/components/Toast';
 
 // Empêcher le splashscreen natif de se cacher automatiquement
@@ -101,8 +102,10 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <ToastProvider>
-      <RootLayoutNav />
-    </ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <RootLayoutNav />
+      </ToastProvider>
+    </AuthProvider>
   );
 }

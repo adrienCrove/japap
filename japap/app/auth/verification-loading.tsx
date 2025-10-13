@@ -10,8 +10,7 @@ export default function VerificationLoadingScreen() {
 
   // Récupérer les données des étapes précédentes
   const userInput = params.userInput as string || '';
-  const firstName = params.firstName as string || '';
-  const lastName = params.lastName as string || '';
+  const fullname = params.fullname as string || '';
   const password = params.password as string || '';
   const phone = params.phone as string || '';
 
@@ -22,8 +21,7 @@ export default function VerificationLoadingScreen() {
         pathname: '/auth/address',
         params: {
           userInput,
-          firstName,
-          lastName,
+          fullname,
           password,
           phone
         }
@@ -37,10 +35,8 @@ export default function VerificationLoadingScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Progress bar - Étape 4/6 */}
+      {/* Progress bar - Étape 2/4 */}
       <View style={styles.progressBarContainer}>
-        <View style={styles.progressBarActive} />
-        <View style={styles.progressBarActive} />
         <View style={styles.progressBarActive} />
         <View style={styles.progressBarActive} />
         <View style={styles.progressBarInactive} />
@@ -77,7 +73,7 @@ const styles = StyleSheet.create({
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
     borderRadius: 2,
   },
   progressBarInactive: {

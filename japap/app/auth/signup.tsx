@@ -5,13 +5,18 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from '@/contexts/ToastContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { checkUser } from '@/services/api';
+import LoadingModal from '@/components/LoadingModal';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { login } = useAuth();
   const params = useLocalSearchParams();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [fullname, setFullname] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
 
   // Récupérer l'email/phone depuis les params
   const userInput = params.userInput as string || '';
@@ -20,31 +25,63 @@ export default function SignupScreen() {
     router.back();
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     // Valider les champs
-    if (!firstName.trim() || !lastName.trim()) {
+    if (!fullname.trim()) {
       showToast('Veuillez remplir tous les champs');
       return;
     }
 
-    // Fermer le clavier avant la navigation
-    Keyboard.dismiss();
+    setIsLoading(true);
 
-    // Naviguer vers la page de vérification du téléphone
-    router.push({
-      pathname: '/auth/phone-verify',
-      params: {
-        userInput,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        password: params.password as string || ''
+    try {
+      // Vérifier si l'utilisateur existe déjà avec ces identifiants
+      const checkResult = await checkUser(userInput);
+
+      if (checkResult.success && checkResult.exists) {
+        // L'utilisateur existe - tenter la connexion automatique
+        const password = params.password as string || '';
+
+        if (password) {
+          const loginResult = await login(userInput, password);
+
+          if (loginResult.success) {
+            // Connexion réussie - rediriger vers l'accueil
+            setTimeout(() => {
+              setIsLoading(false);
+              Keyboard.dismiss();
+              router.replace('/(tabs)');
+            }, 1500);
+            return;
+          }
+        }
       }
-    });
+
+      // L'utilisateur n'existe pas ou la connexion a échoué - continuer le flux d'inscription
+      setIsLoading(false);
+      Keyboard.dismiss();
+
+      // Naviguer vers la page de vérification du téléphone
+      router.push({
+        pathname: '/auth/phone-verify',
+        params: {
+          userInput,
+          fullname: fullname.trim(),
+          password: params.password as string || ''
+        }
+      });
+    } catch (error: any) {
+      setIsLoading(false);
+      showToast(error.message || 'Erreur lors de la vérification');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Modal de chargement */}
+      <LoadingModal visible={isLoading} message="Vérification en cours..." />
 
       {/* Header avec bouton retour et progress bar */}
       <View style={styles.header}>
@@ -52,11 +89,9 @@ export default function SignupScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 1/6 */}
+        {/* Barre de progression - Étape 1/4   */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
-          <View style={styles.progressBarInactive} />
-          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
@@ -71,29 +106,26 @@ export default function SignupScreen() {
             {/* Contenu principal */}
             <View style={styles.contentContainer}>
               {/* Titre */}
-              <Text style={styles.title}>Bonjour ! Quel est votre nom ?</Text>
+              <Text style={styles.title}>Compléter votre profil ! </Text>
+              <View style={styles.subtitleContainer}>
+                <Text style={styles.subtitleText}>
+                Quel est votre nom d&apos;utilisateur ?
+                </Text>
+                
+              </View>
 
-              {/* Champ Prénom */}
+              {/* Champ Nom complet */}
               <TextInput
                 style={styles.input}
-                placeholder="Prénom"
+                placeholder="Nom d'utilisateur"
                 placeholderTextColor="#999"
-                value={firstName}
-                onChangeText={setFirstName}
+                value={fullname}
+                onChangeText={setFullname}
                 autoCapitalize="words"
                 autoComplete="given-name"
               />
 
-              {/* Champ Nom */}
-              <TextInput
-                style={styles.input}
-                placeholder="Nom"
-                placeholderTextColor="#999"
-                value={lastName}
-                onChangeText={setLastName}
-                autoCapitalize="words"
-                autoComplete="family-name"
-              />
+    
             </View>
 
             {/* Bouton Continue */}
@@ -118,25 +150,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   progressBarContainer: {
+    flex: 1,
     flexDirection: 'row',
     height: 4,
     gap: 8,
+    paddingRight: 16,
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
     borderRadius: 2,
   },
   progressBarInactive: {
@@ -159,8 +195,17 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#000',
-    marginBottom: 20,
+    marginBottom: 10,
     fontFamily: 'SUSE',
+  },
+  subtitleContainer: {
+    marginBottom: 28,
+  },
+  subtitleText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 22,
+    fontFamily: 'Lato',
   },
   input: {
     borderWidth: 1,

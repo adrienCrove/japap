@@ -14,8 +14,7 @@ export default function AddressScreen() {
 
   // Récupérer les données des étapes précédentes
   const userInput = params.userInput as string || '';
-  const firstName = params.firstName as string || '';
-  const lastName = params.lastName as string || '';
+  const fullname = params.fullname as string || '';
   const password = params.password as string || '';
   const phone = params.phone as string || '';
 
@@ -29,21 +28,6 @@ export default function AddressScreen() {
       return;
     }
 
-    // TODO: Créer le compte avec toutes les données
-    const accountData = {
-      email: userInput,
-      password,
-      firstName,
-      lastName,
-      phone,
-      address: address.trim()
-    };
-
-    console.log('Création du compte avec:', accountData);
-
-    // TODO: Appeler l'API pour créer le compte
-    // await createAccount(accountData);
-
     // Fermer le clavier avant la navigation
     Keyboard.dismiss();
 
@@ -52,8 +36,7 @@ export default function AddressScreen() {
       pathname: '/auth/interests',
       params: {
         userInput,
-        firstName,
-        lastName,
+        fullname,
         password,
         phone,
         address: address.trim()
@@ -71,10 +54,8 @@ export default function AddressScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 5/6 */}
+        {/* Barre de progression - Étape 3/4 */}
         <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarActive} />
-          <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
@@ -139,25 +120,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   progressBarContainer: {
+    flex: 1,
     flexDirection: 'row',
     height: 4,
     gap: 8,
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
+    borderRadius: 2,
+  },
+  progressBarInactive: {
+    flex: 1,
+    backgroundColor: '#E0E0E0',
     borderRadius: 2,
   },
   keyboardAvoidingView: {

@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useToast } from '@/contexts/ToastContext';
+import { useAuth } from '@/contexts/AuthContext';
+import LoadingModal from '@/components/LoadingModal';
 
 type Interest = {
   id: string;
@@ -17,20 +19,20 @@ const INTERESTS: Interest[] = [
   { id: 'get_help', label: 'Demander de l\'aide aux autres' },
   { id: 'past_incidents', label: 'Incidents de sécurité passés dans ma zone' },
   { id: 'location_monitoring', label: 'Surveillance de localisation (domicile, travail)' },
-  { id: 'police_radio', label: 'Radio police et pompiers' },
   { id: 'other', label: 'Autre' },
 ];
 
 export default function InterestsScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { register } = useAuth();
   const params = useLocalSearchParams();
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Récupérer les données des étapes précédentes
   const userInput = params.userInput as string || '';
-  const firstName = params.firstName as string || '';
-  const lastName = params.lastName as string || '';
+  const fullname = params.fullname as string || '';
   const password = params.password as string || '';
   const phone = params.phone as string || '';
   const address = params.address as string || '';
@@ -53,32 +55,42 @@ export default function InterestsScreen() {
       return;
     }
 
-    // TODO: Créer le compte avec toutes les données incluant les centres d'intérêt
-    const accountData = {
-      email: userInput,
-      password,
-      firstName,
-      lastName,
-      phone,
-      address,
-      interests: selectedInterests
-    };
+    setIsLoading(true);
 
-    console.log('Création du compte avec:', accountData);
+    try {
+      // Créer le compte avec toutes les données
+      const registerResult = await register({
+        email: userInput.includes('@') ? userInput : undefined,
+        phone: phone,
+        password: password,
+        fullname: fullname,
+        address: address,
+        interests: selectedInterests
+      });
 
-    // TODO: Appeler l'API pour créer le compte
-    // await createAccount(accountData);
-
-    // Fermer le clavier avant la navigation
-    Keyboard.dismiss();
-
-    // Naviguer vers l'application principale
-    router.replace('/(tabs)');
+      if (registerResult.success) {
+        // Succès - rediriger vers l'accueil après un délai
+        setTimeout(() => {
+          setIsLoading(false);
+          Keyboard.dismiss();
+          router.replace('/(tabs)');
+        }, 1500);
+      } else {
+        setIsLoading(false);
+        showToast(registerResult.error || 'Erreur lors de la création du compte');
+      }
+    } catch (error: any) {
+      setIsLoading(false);
+      showToast(error.message || 'Erreur lors de la création du compte');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* Modal de chargement */}
+      <LoadingModal visible={isLoading} message="Création du compte..." />
 
       {/* Header avec bouton retour et progress bar */}
       <View style={styles.header}>
@@ -86,10 +98,8 @@ export default function InterestsScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 6/6 */}
+        {/* Barre de progression - Étape 4/4 */}
         <View style={styles.progressBarContainer}>
-          <View style={styles.progressBarActive} />
-          <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
@@ -119,7 +129,7 @@ export default function InterestsScreen() {
 
                 {/* Instruction */}
                 <Text style={styles.instruction}>
-                  Sélectionnez tout ce qui s'applique
+                  Sélectionnez tout ce qui s&apos;applique
                 </Text>
 
                 {/* Liste des centres d'intérêt */}
@@ -178,25 +188,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   progressBarContainer: {
+    flex: 1,
     flexDirection: 'row',
     height: 4,
     gap: 8,
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
+    borderRadius: 2,
+  },
+  progressBarInactive: {
+    flex: 1,
+    backgroundColor: '#E0E0E0',
     borderRadius: 2,
   },
   keyboardAvoidingView: {

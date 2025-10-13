@@ -14,20 +14,20 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#FF0000',
+        tabBarActiveTintColor: '#E94F23',
         tabBarInactiveTintColor: '#999',
         headerShown: false,
         tabBarButton: HapticTab,
-        tabBarStyle: {
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 8,
+        tabBarLabelStyle: {
+          fontFamily: 'Lato',
+          fontSize: 12,
+          fontWeight: '600',
         },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'News',
+          title: 'Actualités',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'globe' : 'globe-outline'} size={24} color={color} />
           ),
@@ -36,7 +36,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Map',
+          title: 'Carte',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'map' : 'map-outline'} size={24} color={color} />
           ),
@@ -56,7 +56,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="alerts"
         options={{
-          title: 'Alerts',
+          title: 'Alertes',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={24} color={color} />
           ),
@@ -65,7 +65,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'Profil',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
           ),
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FF0000',
+    backgroundColor: '#E94F23',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,

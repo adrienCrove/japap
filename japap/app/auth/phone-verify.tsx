@@ -14,8 +14,7 @@ export default function PhoneVerifyScreen() {
 
   // Récupérer les données des étapes précédentes
   const userInput = params.userInput as string || '';
-  const firstName = params.firstName as string || '';
-  const lastName = params.lastName as string || '';
+  const fullname = params.fullname as string || '';
   const password = params.password as string || '';
 
   const handleBack = () => {
@@ -47,8 +46,7 @@ export default function PhoneVerifyScreen() {
       pathname: '/auth/verify-code',
       params: {
         userInput,
-        firstName,
-        lastName,
+        fullname,
         password,
         phone: `+237${cleanPhone}`
       }
@@ -88,12 +86,10 @@ export default function PhoneVerifyScreen() {
           <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
 
-        {/* Barre de progression - Étape 2/6 */}
+        {/* Barre de progression - Étape 2/4 */}
         <View style={styles.progressBarContainer}>
           <View style={styles.progressBarActive} />
           <View style={styles.progressBarActive} />
-          <View style={styles.progressBarInactive} />
-          <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
           <View style={styles.progressBarInactive} />
         </View>
@@ -114,10 +110,12 @@ export default function PhoneVerifyScreen() {
                 Nous allons vous envoyer un code de vérification par SMS
               </Text>
 
-              {/* Indicatif pays + Champ téléphone */}
-              <View style={styles.phoneContainer}>
-                <View style={styles.countryCode}>
+              {/* Champ téléphone avec indicatif intégré */}
+              <View style={styles.phoneInputContainer}>
+                <View style={styles.phonePrefix}>
+                  <Ionicons name="globe" size={20} color="#666" />
                   <Text style={styles.countryCodeText}>+237</Text>
+                  <View style={styles.separator} />
                 </View>
                 <TextInput
                   style={styles.phoneInput}
@@ -131,10 +129,10 @@ export default function PhoneVerifyScreen() {
                 />
               </View>
 
-              {/* Info helper */}
+              {/* Info helper 
               <Text style={styles.helperText}>
                 Numéro de téléphone camerounais
-              </Text>
+              </Text>*/}
             </View>
 
             {/* Bouton Continue */}
@@ -159,25 +157,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   progressBarContainer: {
+    flex: 1,
     flexDirection: 'row',
     height: 4,
     gap: 8,
   },
   progressBarActive: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#E94F23',
     borderRadius: 2,
   },
   progressBarInactive: {
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#000',
-    marginBottom: 12,
+    marginBottom: 10,
     fontFamily: 'SUSE',
   },
   subtitle: {
@@ -210,19 +211,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato',
     lineHeight: 22,
   },
-  phoneContainer: {
+  phoneInputContainer: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  countryCode: {
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#CCC',
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  phonePrefix: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    gap: 8,
+    paddingRight: 12,
   },
   countryCodeText: {
     fontSize: 16,
@@ -230,15 +233,18 @@ const styles = StyleSheet.create({
     color: '#000',
     fontFamily: 'Lato-Bold',
   },
+  separator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E0E0E0',
+    marginLeft: 4,
+  },
   phoneInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#CCC',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
     fontSize: 16,
     fontFamily: 'Lato',
+    color: '#000',
+    paddingLeft: 12,
   },
   helperText: {
     fontSize: 12,
