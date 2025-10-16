@@ -1,4 +1,5 @@
 const prisma = require('../config/prismaClient');
+const { enrichAlertWithPriorityStatus, sortAlertsByPriority } = require('../utils/alertPriority');
 
 // POST /api/alerts
 exports.createAlert = async (req, res) => {
@@ -90,7 +91,8 @@ exports.getAllAlerts = async (req, res) => {
         const alerts = await prisma.alert.findMany({
             where,
             include: {
-                user: true // Inclure les informations de l'utilisateur
+                user: true, // Inclure les informations de l'utilisateur
+                categoryAlert: true // Inclure la catégorie pour calculer priorityStatus
             },
             orderBy: {
                 createdAt: 'desc',
@@ -99,13 +101,19 @@ exports.getAllAlerts = async (req, res) => {
             take: limitNum
         });
 
+        // Enrichir chaque alerte avec priorityStatus
+        const enrichedAlerts = alerts.map(alert => enrichAlertWithPriorityStatus(alert));
+
+        // Trier par priorité (active > expired > resolved)
+        const sortedAlerts = sortAlertsByPriority(enrichedAlerts);
+
         const totalPages = Math.ceil(total / limitNum);
 
         // Format compatible avec le frontend
         const response = {
             success: true,
             data: {
-                alerts: alerts,
+                alerts: sortedAlerts,
                 pagination: {
                     total,
                     page: pageNum,

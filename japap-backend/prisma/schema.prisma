@@ -27,12 +27,15 @@ model User {
   notifications   Notification[]
   subscriptions   Subscription[]
   userInterests   UserInterest[] // Relation vers les intérêts de l'utilisateur
+  images          Image[] // Images uploadées par l'utilisateur
+  uploadedImages  Image[]             @relation("UploadedImages") // Images uploadées par cet admin/user
 }
 
 model Alert {
   id                     String              @id @default(uuid())
   userId                 String?
-  category               String
+  category               String? // Deprecated - kept for migration, use categoryAlertId
+  categoryAlertId        String? // Foreign key to CategoryAlert
   severity               String?
   description            String?
   location               Json?
@@ -46,8 +49,12 @@ model Alert {
   source                 String?
   categorySpecificFields Json?
   user                   User?               @relation(fields: [userId], references: [id])
+  categoryAlert          CategoryAlert?      @relation(fields: [categoryAlertId], references: [id])
   confirmedBy            AlertConfirmation[]
   notifications          Notification[]
+  images                 Image[] // Images associées à cette alerte
+
+  @@index([categoryAlertId])
 }
 
 model AlertConfirmation {
@@ -143,12 +150,13 @@ model BroadcastLog {
 }
 
 model Interest {
-  id            String         @id @default(uuid())
-  label         String         @unique // "Alertes de sécurité à proximité"
-  code          String         @unique // "nearby_alerts"
-  description   String?
-  createdAt     DateTime       @default(now())
-  userInterests UserInterest[]
+  id                     String                  @id @default(uuid())
+  label                  String                  @unique // "Alertes de sécurité à proximité"
+  code                   String                  @unique // "nearby_alerts"
+  description            String?
+  createdAt              DateTime                @default(now())
+  userInterests          UserInterest[]
+  categoryAlertInterests CategoryAlertInterest[]
 }
 
 model UserInterest {
@@ -163,4 +171,105 @@ model UserInterest {
   @@unique([userId, interestId])
   @@index([userId])
   @@index([interestId])
+}
+
+// ============ CATEGORY ALERT MODELS ============
+
+model CategoryAlert {
+  id          String  @id @default(uuid())
+  code        String  @unique // "MEDC", "FIRV", "ACCG", etc.
+  name        String // "Urgence médicale critique"
+  description String?
+
+  // Métadonnées visuelles
+  icon  String // "🚑", "🔥", "🚗"
+  color String // "#dc2626"
+
+  // Classification
+  priority        String // "critical", "high", "medium", "low"
+  defaultSeverity String @default("medium") // "critical", "high", "medium", "low"
+
+  // Temps de réponse et expiration
+  responseTime    Int // minutes (5, 15, 30, 60)
+  expirationHours Int? // Heures avant dépriorisation (null = jamais, ex: disparitions)
+
+  // Services d'urgence et routage (JSON arrays)
+  emergencyServices Json // ["SAMU", "Police", "Pompiers"]
+  routingMatrix     Json // ["Police", "Gendarmerie", "SAMU"]
+
+  // Parsing NLP (keywords pour détection dans messages)
+  keywords Json // ["urgent", "accident", "blessé"]
+
+  // État et ordre
+  isActive Boolean @default(true)
+  order    Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  alerts                 Alert[]
+  categoryAlertInterests CategoryAlertInterest[]
+
+  @@index([code])
+  @@index([priority, isActive])
+  @@index([order])
+}
+
+// Table de liaison entre Interest (préférences user) et CategoryAlert (types alertes)
+model CategoryAlertInterest {
+  id              String   @id @default(uuid())
+  interestId      String
+  categoryAlertId String
+  priority        Int      @default(0) // Ordre de priorité pour l'utilisateur
+  createdAt       DateTime @default(now())
+
+  interest      Interest      @relation(fields: [interestId], references: [id], onDelete: Cascade)
+  categoryAlert CategoryAlert @relation(fields: [categoryAlertId], references: [id], onDelete: Cascade)
+
+  @@unique([interestId, categoryAlertId])
+  @@index([interestId])
+  @@index([categoryAlertId])
+}
+
+// ============ IMAGE MANAGEMENT MODELS ============
+
+model Image {
+  id           String   @id @default(uuid())
+  filename     String // Nom du fichier stocké (avec timestamp)
+  originalName String // Nom original du fichier uploadé
+  path         String // Chemin relatif: /uploads/alerts/123/image.jpg
+  url          String // URL complète accessible
+  size         Int // Taille en bytes
+  mimeType     String // image/jpeg, image/png, etc.
+  width        Int? // Largeur de l'image en pixels
+  height       Int? // Hauteur de l'image en pixels
+
+  // Relations
+  alertId String? // Alerte associée (optionnel)
+  alert   Alert?  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  userId String? // Propriétaire de l'image
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  uploadedBy String? // Qui a uploadé (admin/user)
+  uploader   User?   @relation("UploadedImages", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  // Catégorisation
+  category String? // "alert", "user", "admin", "broadcast", "temp"
+  isPublic Boolean @default(false) // Accessible publiquement ou privé
+
+  // Métadonnées
+  metadata Json? // { thumbnail: "/path/to/thumb.jpg", watermark: true, compressed: true, ... }
+
+  // Stockage
+  storage String @default("local") // "local" ou "remote"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([alertId])
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
 }
