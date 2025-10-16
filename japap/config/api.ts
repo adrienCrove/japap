@@ -21,3 +21,13 @@ export const ALERTS_ENDPOINTS = {
   CREATE: `${API_BASE_URL}/alerts`,
   UPDATE: (id: string) => `${API_BASE_URL}/alerts/${id}`,
 };
+
+// Endpoints des catégories d'alertes
+export const CATEGORY_ENDPOINTS = {
+  GET_ALL: `${API_BASE_URL}/category-alerts`,
+  GET_BY_ID: (id: string) => `${API_BASE_URL}/category-alerts/${id}`,
+  GET_BY_CODE: (code: string) => `${API_BASE_URL}/category-alerts/code/${code}`,
+  GET_BY_PRIORITY: (priority: string) => `${API_BASE_URL}/category-alerts/priority/${priority}`,
+  SEARCH: `${API_BASE_URL}/category-alerts/search`,
+  STATS: `${API_BASE_URL}/category-alerts/stats`,
+};

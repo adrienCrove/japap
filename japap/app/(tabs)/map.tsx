@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +8,8 @@ import { useToast } from '@/contexts/ToastContext';
 import NativeMapView from '@/components/map/NativeMapView';
 import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // Type local pour la carte (adapté de l'API)
 interface MapAlert {
@@ -102,7 +104,13 @@ export default function MapScreen() {
 
   const { showToast } = useToast();
   const bottomSheetRef = React.useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => ['25%', '50%', '75%'], []);
+  // Calculer les snapPoints : 25%, 50% et 80% de la hauteur d'écran
+  // Mais en laissant toujours 20% visible en haut
+  const snapPoints = useMemo(() => [
+    '25%',
+    '50%',
+    '80%'
+  ], []);
 
   // Charger les alertes depuis l'API
   const fetchAlerts = useCallback(async () => {
@@ -177,31 +185,101 @@ export default function MapScreen() {
     bottomSheetRef.current?.snapToIndex(1); // Ouvrir le bottom sheet au niveau moyen
   }, []);
 
+  // Calculer le temps écoulé depuis la création de l'alerte
+  const getTimeAgo = (createdAt: string): string => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffInMs = now.getTime() - created.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours}h`;
+    } else {
+      return `${diffInDays}d`;
+    }
+  };
+
+  // Calculer la distance (pour l'instant, retourne une valeur fixe - à implémenter avec la vraie position)
+  const getDistance = (alert: MapAlert): string => {
+    // TODO: Implémenter le calcul de distance réel avec la position de l'utilisateur
+    return '2.5 km';
+  };
+
+  // Obtenir le badge de statut
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'resolved':
+        return { label: 'Résolue', icon: 'checkmark-circle', color: '#059669' };
+      case 'active':
+        return { label: 'Active', icon: 'alert-circle', color: '#EAB308' };
+      case 'pending':
+        return { label: 'En attente', icon: 'time', color: '#6B7280' };
+      case 'rejected':
+        return { label: 'Rejetée', icon: 'close-circle', color: '#DC2626' };
+      default:
+        return { label: 'Inconnue', icon: 'help-circle', color: '#9CA3AF' };
+    }
+  };
+
   // Rendu d'un item d'alerte dans le bottom sheet
   const renderAlertItem = ({ item }: { item: MapAlert }) => {
     const isSelected = selectedAlert?.id === item.id;
+    const statusBadge = getStatusBadge(item.status);
+    const timeAgo = getTimeAgo(item.createdAt);
+    const distance = getDistance(item);
 
     return (
       <TouchableOpacity
-        style={[styles.alertItem, isSelected && styles.alertItemSelected]}
+        style={[styles.alertCard, isSelected && styles.alertCardSelected]}
         onPress={() => handleAlertSelect(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.alertIcon, { backgroundColor: getMarkerColor(item.category) + '20' }]}>
-          <Ionicons name={getCategoryIcon(item.category)} size={24} color={getMarkerColor(item.category)} />
+        {/* Header: Icône + Titre + Badge Statut */}
+        <View style={styles.alertCardHeader}>
+          <View style={[styles.alertCardIcon, { backgroundColor: getMarkerColor(item.category) }]}>
+            <Ionicons name={getCategoryIcon(item.category)} size={20} color="#fff" />
+          </View>
+
+          <View style={styles.alertCardTitleContainer}>
+            <Text style={styles.alertCardTitle} numberOfLines={1}>{item.title}</Text>
+            <View style={styles.alertCardMeta}>
+              <Text style={styles.alertCardMetaText}>
+                {distance} · {timeAgo}
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.statusBadge, { backgroundColor: statusBadge.color + '15' }]}>
+            <Ionicons name={statusBadge.icon as any} size={12} color={statusBadge.color} />
+            <Text style={[styles.statusBadgeText, { color: statusBadge.color }]}>
+              {statusBadge.label}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.alertContent}>
-          <Text style={styles.alertTitle} numberOfLines={1}>{item.title}</Text>
-          <Text style={styles.alertDescription} numberOfLines={2}>{item.description}</Text>
-          <Text style={styles.alertLocation} numberOfLines={1}>
-            <Ionicons name="location-outline" size={12} color="#666" /> {item.location.address}
-          </Text>
-        </View>
+        {/* Description */}
+        <Text style={styles.alertCardDescription} numberOfLines={2}>
+          {item.description}
+        </Text>
 
-        <View style={styles.alertMeta}>
-          <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
-            <Ionicons name="alert-circle" size={16} color="#fff" />
+        {/* Actions */}
+        <View style={styles.alertCardActions}>
+          <TouchableOpacity style={styles.commentInput} activeOpacity={0.9}>
+            <Text style={styles.commentInputPlaceholder}>Écrire un commentaire...</Text>
+          </TouchableOpacity>
+
+          <View style={styles.alertCardIconActions}>
+            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+              <Ionicons name="camera-outline" size={20} color="#666" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+              <Ionicons name="share-outline" size={20} color="#666" />
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -296,6 +374,7 @@ export default function MapScreen() {
           enableContentPanningGesture={true}
           backgroundStyle={styles.bottomSheetBackground}
           handleIndicatorStyle={styles.bottomSheetIndicator}
+          maxDynamicContentSize={SCREEN_HEIGHT * 0.80}
         >
           <View style={styles.bottomSheetHeader}>
             <View style={styles.bottomSheetTitleRow}>
@@ -468,6 +547,10 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 1000,
   },
+  bottomSheetContainer: {
+    marginHorizontal: 0,
+    marginBottom: 0,
+  },
   bottomSheetBackground: {
     backgroundColor: '#fff',
     borderTopLeftRadius: 24,
@@ -571,10 +654,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 100,
   },
-  alertItem: {
-    flexDirection: 'row',
+  // Nouveaux styles pour les cartes d'alertes (design Citizen-like)
+  alertCard: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -582,55 +665,110 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
-  alertItemSelected: {
+  alertCardSelected: {
     borderColor: '#E94F23',
     borderWidth: 2,
     backgroundColor: '#FFF5F2',
   },
-  alertIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  alertCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    marginBottom: 8,
+  },
+  alertCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  alertContent: {
+  alertCardTitleContainer: {
     flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+
   },
-  alertTitle: {
+  alertCardTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#000',
-    marginBottom: 4,
     fontFamily: 'Lato-Bold',
   },
-  alertDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 6,
-    fontFamily: 'Lato',
-    lineHeight: 18,
-  },
-  alertLocation: {
-    fontSize: 12,
-    color: '#999',
-    fontFamily: 'Lato',
-  },
-  alertMeta: {
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-  severityBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    minWidth: 36,
+  statusBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Lato-Bold',
+  },
+  alertCardMeta: {
+    marginBottom: 8,
+    marginLeft: 0,
+    marginTop: 2,
+  },
+  alertCardMetaText: {
+    fontSize: 13,
+    color: '#666',
+    fontFamily: 'Lato',
+  },
+  alertCardDescription: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+    marginBottom: 12,
+    fontFamily: 'Lato',
+  },
+  alertCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 12,
+  },
+  commentInput: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginRight: 8,
+  },
+  commentInputPlaceholder: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: 'Lato',
+  },
+  alertCardIconActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F9FAFB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   emptyContainer: {
     flex: 1,

@@ -1,15 +1,17 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { user, isAuthenticated } = useAuth();
 
   return (
     <Tabs
@@ -65,10 +67,25 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
-          ),
+          title: isAuthenticated ? 'Vous' : 'Profil',
+          tabBarIcon: ({ color, focused }) => {
+            // Si l'utilisateur est connecté, afficher l'avatar avec l'initiale
+            if (isAuthenticated && user?.name) {
+              const initial = user.name.trim()[0].toUpperCase();
+              return (
+                <View style={[
+                  styles.tabAvatar,
+                  { backgroundColor: focused ? '#E94F23' : '#999' }
+                ]}>
+                  <Text style={styles.tabAvatarText}>{initial}</Text>
+                </View>
+              );
+            }
+            // Sinon, afficher l'icône par défaut
+            return (
+              <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
+            );
+          },
         }}
       />
     </Tabs>
@@ -92,5 +109,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  tabAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabAvatarText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'SUSE',
   },
 });

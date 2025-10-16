@@ -1,4 +1,4 @@
-import { AUTH_ENDPOINTS, ALERTS_ENDPOINTS } from '@/config/api';
+import { AUTH_ENDPOINTS, ALERTS_ENDPOINTS, CATEGORY_ENDPOINTS } from '@/config/api';
 
 export interface CheckUserResponse {
   success: boolean;
@@ -245,6 +245,144 @@ export async function getAlertById(id: string): Promise<{ success: boolean; data
     return data;
   } catch (error: any) {
     console.error('Error fetching alert:', error);
+    return {
+      success: false,
+      error: error.message || 'Erreur de connexion au serveur',
+    };
+  }
+}
+
+/**
+ * Créer une nouvelle alerte
+ */
+export interface CreateAlertData {
+  category: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  title: string;
+  description: string;
+  location: AlertLocation;
+  mediaUrl?: string;
+  userId?: string;
+  source?: string;
+}
+
+export async function createAlert(alertData: CreateAlertData): Promise<{ success: boolean; data?: Alert; error?: string }> {
+  try {
+    const response = await fetch(ALERTS_ENDPOINTS.CREATE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...alertData,
+        source: alertData.source || 'app',
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors de la création de l\'alerte');
+    }
+
+    return {
+      success: true,
+      data: data,
+    };
+  } catch (error: any) {
+    console.error('Error creating alert:', error);
+    return {
+      success: false,
+      error: error.message || 'Erreur de connexion au serveur',
+    };
+  }
+}
+
+// ============ CATEGORY ALERTS API ============
+
+export interface CategoryAlert {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon: string;
+  color: string;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  defaultSeverity: string;
+  responseTime: number;
+  expirationHours?: number;
+  emergencyServices: string[];
+  routingMatrix: string[];
+  keywords: string[];
+  isActive: boolean;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CategoryAlertsResponse {
+  success: boolean;
+  data?: CategoryAlert[];
+  count?: number;
+  error?: string;
+}
+
+/**
+ * Récupérer toutes les catégories d'alertes actives
+ */
+export async function getCategoryAlerts(params?: { priority?: string; isActive?: boolean }): Promise<CategoryAlertsResponse> {
+  try {
+    const queryParams = new URLSearchParams();
+
+    if (params?.priority) queryParams.append('priority', params.priority);
+    if (params?.isActive !== undefined) queryParams.append('isActive', params.isActive.toString());
+
+    const url = `${CATEGORY_ENDPOINTS.GET_ALL}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors de la récupération des catégories');
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error('Error fetching category alerts:', error);
+    return {
+      success: false,
+      error: error.message || 'Erreur de connexion au serveur',
+    };
+  }
+}
+
+/**
+ * Récupérer une catégorie par son code
+ */
+export async function getCategoryByCode(code: string): Promise<{ success: boolean; data?: CategoryAlert; error?: string }> {
+  try {
+    const response = await fetch(CATEGORY_ENDPOINTS.GET_BY_CODE(code), {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors de la récupération de la catégorie');
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error('Error fetching category by code:', error);
     return {
       success: false,
       error: error.message || 'Erreur de connexion au serveur',

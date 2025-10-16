@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import LoadingModal from '@/components/LoadingModal';
+import Avatar from '@/components/Avatar';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -54,7 +55,7 @@ export default function ProfileScreen() {
         {/* En-tête du profil */}
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <Ionicons name="person-circle" size={100} color="#E94F23" />
+            <Avatar name={user?.name} size="large" />
           </View>
           <Text style={styles.userName}>{user?.name || 'Utilisateur'}</Text>
           <Text style={styles.userEmail}>{user?.email || user?.phone || ''}</Text>

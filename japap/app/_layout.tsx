@@ -10,6 +10,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import SplashScreen from '@/components/SplashScreen';
 import { ToastProvider, useToast } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ThemeProvider as CustomThemeProvider } from '@/contexts/ThemeContext';
 import Toast from '@/components/Toast';
 
 // Empêcher le splashscreen natif de se cacher automatiquement
@@ -102,10 +103,12 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <RootLayoutNav />
-      </ToastProvider>
-    </AuthProvider>
+    <CustomThemeProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <RootLayoutNav />
+        </ToastProvider>
+      </AuthProvider>
+    </CustomThemeProvider>
   );
 }
