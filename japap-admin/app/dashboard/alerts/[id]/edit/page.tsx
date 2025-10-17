@@ -71,6 +71,23 @@ const getSourceFromChannel = (): 'app' | 'whatsapp' | 'telegram' | 'sms' | 'emai
   return 'web';
 };
 
+// Helper pour normaliser les coordonnées (supporte array [lat, lng] et objet {lat, lng})
+const normalizeCoordinates = (coordinates: any): { lat: number; lng: number } => {
+  if (!coordinates) return { lat: 0, lng: 0 };
+
+  // Si c'est déjà un objet {lat, lng}
+  if (coordinates.lat !== undefined && coordinates.lng !== undefined) {
+    return { lat: coordinates.lat, lng: coordinates.lng };
+  }
+
+  // Si c'est un array [lat, lng]
+  if (Array.isArray(coordinates) && coordinates.length >= 2) {
+    return { lat: coordinates[0], lng: coordinates[1] };
+  }
+
+  return { lat: 0, lng: 0 };
+};
+
 export default function EditAlertPage() {
   const router = useRouter();
   const params = useParams();
@@ -90,7 +107,7 @@ export default function EditAlertPage() {
     description: '',
     location: {
       address: '',
-      coordinates: [0, 0],
+      coordinates: { lat: 0, lng: 0 },
       city: 'Yaoundé',
       region: 'Centre',
       isValidated: false,
@@ -128,9 +145,12 @@ export default function EditAlertPage() {
             category: alert.category || '',
             severity: alert.severity || 'medium',
             description: alert.description || '',
-            location: alert.location || {
+            location: alert.location ? {
+              ...alert.location,
+              coordinates: normalizeCoordinates(alert.location.coordinates)
+            } : {
               address: '',
-              coordinates: [0, 0],
+              coordinates: { lat: 0, lng: 0 },
               city: 'Yaoundé',
               region: 'Centre',
               isValidated: false,
@@ -266,7 +286,7 @@ useEffect(() => {
           const lng = place.geometry.location.lng();
 
           // Enrichir les données de localisation
-          enrichLocationData(place.formatted_address || '', [lat, lng])
+          enrichLocationData(place.formatted_address || '', { lat, lng })
             .then(enrichedLocation => {
               setFormData(prev => ({
                 ...prev,
@@ -282,7 +302,7 @@ useEffect(() => {
                 ...prev,
                 location: {
                   address: place.formatted_address || '',
-                  coordinates: [lat, lng],
+                  coordinates: { lat, lng },
                   city: 'Yaoundé',
                   region: 'Centre',
                   isValidated: true,
@@ -390,7 +410,7 @@ useEffect(() => {
             }
 
             // Enrichir les données de localisation
-            enrichLocationData(address, [latitude, longitude])
+            enrichLocationData(address, { lat: latitude, lng: longitude })
               .then(enrichedLocation => {
                 setFormData(prev => ({
                   ...prev,
@@ -409,7 +429,7 @@ useEffect(() => {
                   ...prev,
                   location: {
                     address: address,
-                    coordinates: [latitude, longitude],
+                    coordinates: { lat: latitude, lng: longitude },
                     city: 'Yaoundé',
                     region: 'Centre',
                     isValidated: true,
@@ -430,7 +450,7 @@ useEffect(() => {
             ...prev,
             location: {
               address: fallbackAddress,
-              coordinates: [latitude, longitude],
+              coordinates: { lat: latitude, lng: longitude },
               city: 'Yaoundé',
               region: 'Centre',
               isValidated: false,
@@ -1517,9 +1537,9 @@ useEffect(() => {
                 )}
               </Button>
             </div>
-            {formData.location.coordinates[0] !== 0 && (
+            {formData.location.coordinates.lat !== 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                Coordonnées: {formData.location.coordinates[0].toFixed(6)}, {formData.location.coordinates[1].toFixed(6)}
+                Coordonnées: {formData.location.coordinates.lat.toFixed(6)}, {formData.location.coordinates.lng.toFixed(6)}
               </p>
             )}
             {!googleMapsLoaded && (

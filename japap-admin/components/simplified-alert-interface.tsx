@@ -66,7 +66,7 @@ export default function SimplifiedAlertInterface({
       description: message,
       location: {
         address: location,
-        coordinates: [0, 0] // À déterminer par géocodage
+        coordinates: { lat: 0, lng: 0 } // À déterminer par géocodage
       },
       source: platform,
       status: 'pending',

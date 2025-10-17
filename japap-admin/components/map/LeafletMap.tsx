@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.heat';
+import 'leaflet.gridlayer.googlemutant';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 // Fix for default markers in React
 delete (L.Icon.Default.prototype as L.Icon.Default & { _getIconUrl?: () => string })._getIconUrl;
@@ -56,6 +59,7 @@ interface LeafletMapProps {
     heatmap?: boolean;
     zones?: boolean;
     administrative?: boolean;
+    traffic?: boolean;
   };
   selectedAlert?: MapAlert | null;
   selectedZone?: Zone | null;
@@ -75,7 +79,8 @@ export default function LeafletMap({
     recentAlerts: true,
     heatmap: false,
     zones: true,
-    administrative: false
+    administrative: false,
+    traffic: false
   },
   selectedAlert,
   selectedZone,
@@ -90,6 +95,8 @@ export default function LeafletMap({
   const alertMarkersRef = useRef<L.LayerGroup>(new L.LayerGroup());
   const zoneLayersRef = useRef<L.LayerGroup>(new L.LayerGroup());
   const heatLayerRef = useRef<L.HeatLayer | null>(null);
+  const trafficLayerRef = useRef<any>(null);
+  const [showTraffic, setShowTraffic] = useState(layers.traffic || false);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -115,7 +122,13 @@ export default function LeafletMap({
           }
         });
       }
-      
+
+      // Clean up traffic layer
+      if (trafficLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(trafficLayerRef.current);
+        trafficLayerRef.current = null;
+      }
+
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -334,6 +347,52 @@ export default function LeafletMap({
     }
   }, [selectedZone]);
 
+  // Traffic Layer
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    // Remove existing traffic layer
+    if (trafficLayerRef.current && mapInstanceRef.current) {
+      mapInstanceRef.current.removeLayer(trafficLayerRef.current);
+      trafficLayerRef.current = null;
+    }
+
+    // Add traffic layer if enabled
+    if (showTraffic) {
+      try {
+        // @ts-ignore - gridLayer.googleMutant is added by the library
+        if (typeof L.gridLayer.googleMutant === 'function') {
+          // @ts-ignore
+          trafficLayerRef.current = L.gridLayer.googleMutant({
+            type: 'roadmap',
+            styles: [
+              { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+              { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+              { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+              { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+            ]
+          });
+
+          // Add traffic layer
+          // @ts-ignore
+          trafficLayerRef.current.addGoogleLayer('TrafficLayer');
+          trafficLayerRef.current.addTo(mapInstanceRef.current);
+        } else {
+          console.warn('Google Mutant plugin not loaded. Traffic layer unavailable.');
+        }
+      } catch (error) {
+        console.error('Error loading traffic layer:', error);
+      }
+    }
+
+    return () => {
+      if (trafficLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(trafficLayerRef.current);
+        trafficLayerRef.current = null;
+      }
+    };
+  }, [showTraffic]);
+
   return (
     <div className="relative h-full w-full">
       <div ref={mapRef} className="h-full w-full" />
@@ -378,6 +437,18 @@ export default function LeafletMap({
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 border-2 border-blue-600 bg-blue-100"></div>
             <span>Zones</span>
+          </div>
+          <hr className="my-2" />
+          <div className="flex items-center justify-between space-x-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-gradient-to-r from-green-500 via-yellow-500 to-red-500"></div>
+              <span>Trafic</span>
+            </div>
+            <Switch
+              checked={showTraffic}
+              onCheckedChange={setShowTraffic}
+              className="scale-75"
+            />
           </div>
         </div>
       </div>

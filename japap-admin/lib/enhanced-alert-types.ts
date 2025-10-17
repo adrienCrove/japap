@@ -4,8 +4,8 @@
 export interface EnhancedLocation {
   // Données existantes
   address: string;
-  coordinates: [number, number];
-  
+  coordinates: { lat: number; lng: number };
+
   // Nouvelles données géographiques
   precision?: number;           // Précision GPS en mètres
   placeId?: string;            // Google Place ID pour référence unique
@@ -15,7 +15,7 @@ export interface EnhancedLocation {
   postalCode?: string;         // Code postal
   landmark?: string;           // Point de repère proche
   accessInstructions?: string; // Instructions d'accès détaillées
-  
+
   // Validation géographique
   isValidated: boolean;        // Coordonnées validées
   validationSource: 'gps' | 'manual' | 'google_places';

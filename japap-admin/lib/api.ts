@@ -41,7 +41,7 @@ export interface TopZone {
   name: string;
   alertCount: number;
   lastActivity: string;
-  coordinates: [number, number]; // [lat, lng]
+  coordinates: { lat: number; lng: number };
 }
 
 export interface TopUser {
@@ -76,7 +76,7 @@ export interface Alert {
   description: string;
   location: {
     address: string;
-    coordinates: [number, number];
+    coordinates: { lat: number; lng: number };
   };
   user?: { // User peut être null pour une alerte manuelle
     id: string;
@@ -125,7 +125,7 @@ export interface UserData {
   location?: {
     address: string;
     city: string;
-    coordinates: [number, number];
+    coordinates: { lat: number; lng: number };
   };
   birthDate?: string;
   notes?: string;

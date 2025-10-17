@@ -770,6 +770,20 @@ interface EditAlertFormProps {
 }
 
 const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
+  // Helper pour normaliser les coordonnées (supporte array et objet)
+  const normalizeCoordinates = (coordinates: { lat: number; lng: number } | [number, number] | undefined): { lat: number; lng: number } => {
+    if (!coordinates) return { lat: 0, lng: 0 };
+    // Si c'est déjà un objet {lat, lng}
+    if (typeof coordinates === 'object' && !Array.isArray(coordinates)) {
+      return { lat: coordinates.lat, lng: coordinates.lng };
+    }
+    // Si c'est un array [lat, lng]
+    if (Array.isArray(coordinates) && coordinates.length >= 2) {
+      return { lat: coordinates[0], lng: coordinates[1] };
+    }
+    return { lat: 0, lng: 0 };
+  };
+
   const [formData, setFormData] = useState({
     displayTitle: alert.displayTitle || '',
     description: alert.description || '',
@@ -778,7 +792,7 @@ const EditAlertForm: React.FC<EditAlertFormProps> = ({ alert, onUpdate }) => {
     status: alert.status || 'pending',
     location: {
       address: alert.location?.address || '',
-      coordinates: alert.location?.coordinates || [0, 0]
+      coordinates: normalizeCoordinates(alert.location?.coordinates)
     },
     categorySpecificFields: (alert as any).categorySpecificFields || null
   });

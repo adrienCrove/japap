@@ -76,12 +76,14 @@ export default function MapPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<MapAlert | null>(null);
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
+  const [showTraffic, setShowTraffic] = useState(false);
   const layers = {
     activeAlerts: true,
     recentAlerts: true,
     heatmap: false,
     zones: true,
-    administrative: false
+    administrative: false,
+    traffic: showTraffic
   };
 
   
@@ -151,14 +153,22 @@ export default function MapPage() {
 
   // Fonction pour convertir les alertes de l'API vers le format MapAlert
   const convertApiAlertToMapAlert = (apiAlert: ApiAlert): MapAlert => {
-    // Extraire les coordonnées depuis la location JSON
+    // Extraire les coordonnées depuis la location JSON (supporte array et objet)
     let lat = 6.0, lng = 12.0, address = 'Adresse inconnue';
-    
+
     if (apiAlert.location && typeof apiAlert.location === 'object') {
-      const loc = apiAlert.location as { coordinates?: number[]; address?: string };
-      if (loc.coordinates && Array.isArray(loc.coordinates)) {
-        lat = loc.coordinates[0] || lat;
-        lng = loc.coordinates[1] || lng;
+      const loc = apiAlert.location as { coordinates?: any; address?: string };
+      if (loc.coordinates) {
+        // Support format array [lat, lng]
+        if (Array.isArray(loc.coordinates)) {
+          lat = loc.coordinates[0] || lat;
+          lng = loc.coordinates[1] || lng;
+        }
+        // Support format objet {lat, lng}
+        else if (loc.coordinates.lat !== undefined && loc.coordinates.lng !== undefined) {
+          lat = loc.coordinates.lat || lat;
+          lng = loc.coordinates.lng || lng;
+        }
       }
       address = loc.address || address;
     }

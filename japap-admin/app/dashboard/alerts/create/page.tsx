@@ -10,10 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { 
-  AlertTriangle, 
-  MapPin, 
-  User, 
+import {
+  AlertTriangle,
+  MapPin,
+  User,
   Calendar,
   Save,
   ArrowLeft,
@@ -24,10 +24,13 @@ import {
   Video,
   Mic,
   Loader2,
-  Navigation
+  Navigation,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import Breadcrumb from '@/components/layout/Breadcrumb';
-import { createManualAlert } from '@/lib/api';
+import { createManualAlert, getToken } from '@/lib/api';
+import { uploadImage, updateImage, type Image as UploadedImage } from '@/lib/imageApi';
 
 import { getAllCategories, getCategoryByCode, calculateDynamicSeverity, getEmergencyServices } from '@/lib/enhanced-categories';
 import { getFieldsForCategory, TrafficAccidentFields, TheftFields, DisappearanceFields, FireFields, MedicalEmergencyFields, InfrastructureFields } from '@/lib/enhanced-category-fields';
@@ -38,6 +41,9 @@ interface MediaFile {
   file: File;
   url: string;
   type: 'image' | 'video' | 'audio';
+  uploadStatus?: 'pending' | 'uploading' | 'uploaded' | 'error';
+  uploadedImage?: UploadedImage;
+  uploadError?: string;
 }
 
 // Utilisation des types enrichis depuis enhanced-category-fields.ts
@@ -87,7 +93,7 @@ export default function CreateAlertPage() {
     description: '',
     location: {
       address: '',
-      coordinates: [0, 0],
+      coordinates: { lat: 0, lng: 0 },
       city: 'Yaoundé',
       region: 'Centre',
       isValidated: false,
@@ -197,7 +203,7 @@ useEffect(() => {
           const lng = place.geometry.location.lng();
 
           // Enrichir les données de localisation
-          enrichLocationData(place.formatted_address || '', [lat, lng])
+          enrichLocationData(place.formatted_address || '', { lat, lng })
             .then(enrichedLocation => {
               setFormData(prev => ({
                 ...prev,
@@ -213,7 +219,7 @@ useEffect(() => {
                 ...prev,
                 location: {
                   address: place.formatted_address || '',
-                  coordinates: [lat, lng],
+                  coordinates: { lat, lng },
                   city: 'Yaoundé',
                   region: 'Centre',
                   isValidated: true,
@@ -321,7 +327,7 @@ useEffect(() => {
             }
 
             // Enrichir les données de localisation
-            enrichLocationData(address, [latitude, longitude])
+            enrichLocationData(address, { lat: latitude, lng: longitude })
               .then(enrichedLocation => {
                 setFormData(prev => ({
                   ...prev,
@@ -340,7 +346,7 @@ useEffect(() => {
                   ...prev,
                   location: {
                     address: address,
-                    coordinates: [latitude, longitude],
+                    coordinates: { lat: latitude, lng: longitude },
                     city: 'Yaoundé',
                     region: 'Centre',
                     isValidated: true,
@@ -361,7 +367,7 @@ useEffect(() => {
             ...prev,
             location: {
               address: fallbackAddress,
-              coordinates: [latitude, longitude],
+              coordinates: { lat: latitude, lng: longitude },
               city: 'Yaoundé',
               region: 'Centre',
               isValidated: false,
@@ -398,22 +404,22 @@ useEffect(() => {
   };
 
   // Gérer l'upload de fichiers média
-  const handleMediaUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
-    
-    files.forEach(file => {
+
+    for (const file of files) {
       // Vérifications du fichier
       if (file.type.startsWith('image/')) {
         if (formData.mediaFiles.filter(f => f.type === 'image').length >= 3) {
           toast.error('Maximum 3 images autorisées');
-          return;
+          continue;
         }
       } else if (file.type.startsWith('video/')) {
         if (formData.mediaFiles.some(f => f.type === 'video')) {
           toast.error('Une seule vidéo autorisée');
-          return;
+          continue;
         }
-        
+
         // Vérifier la durée de la vidéo
         const video = document.createElement('video');
         video.src = URL.createObjectURL(file);
@@ -427,9 +433,9 @@ useEffect(() => {
       } else if (file.type.startsWith('audio/')) {
         if (formData.mediaFiles.some(f => f.type === 'audio')) {
           toast.error('Un seul fichier audio autorisé');
-          return;
+          continue;
         }
-        
+
         // Vérifier la durée de l'audio
         const audio = document.createElement('audio');
         audio.src = URL.createObjectURL(file);
@@ -442,28 +448,82 @@ useEffect(() => {
         };
       } else {
         toast.error('Format de fichier non supporté');
-        return;
+        continue;
       }
 
       // Vérifier que pas de vidéo/audio en même temps
       if ((file.type.startsWith('video/') && formData.mediaFiles.some(f => f.type === 'audio')) ||
           (file.type.startsWith('audio/') && formData.mediaFiles.some(f => f.type === 'video'))) {
         toast.error('Impossible de combiner vidéo et audio');
-        return;
+        continue;
       }
 
       const mediaFile: MediaFile = {
         file,
         url: URL.createObjectURL(file),
-        type: file.type.startsWith('image/') ? 'image' : 
-              file.type.startsWith('video/') ? 'video' : 'audio'
+        type: file.type.startsWith('image/') ? 'image' :
+              file.type.startsWith('video/') ? 'video' : 'audio',
+        uploadStatus: 'pending'
       };
 
+      // Ajouter le fichier avec statut pending
       setFormData(prev => ({
         ...prev,
         mediaFiles: [...prev.mediaFiles, mediaFile]
       }));
-    });
+
+      // Uploader immédiatement
+      const currentIndex = formData.mediaFiles.length;
+
+      // Mettre à jour le statut en uploading
+      setFormData(prev => ({
+        ...prev,
+        mediaFiles: prev.mediaFiles.map((f, i) =>
+          i === currentIndex ? { ...f, uploadStatus: 'uploading' } : f
+        )
+      }));
+
+      try {
+        // Récupérer le token d'authentification
+        const token = getToken();
+
+        // Upload vers le serveur (catégorie temp pour l'instant)
+        const uploadedImage = await uploadImage(file, {
+          category: 'temp',
+          isPublic: true,
+        }, token || undefined);
+
+        // Mettre à jour avec l'image uploadée
+        setFormData(prev => ({
+          ...prev,
+          mediaFiles: prev.mediaFiles.map((f, i) =>
+            i === currentIndex ? {
+              ...f,
+              uploadStatus: 'uploaded',
+              uploadedImage: uploadedImage
+            } : f
+          )
+        }));
+
+        toast.success(`${file.name} uploadé avec succès`);
+      } catch (error) {
+        console.error('Erreur upload:', error);
+
+        // Mettre à jour avec l'erreur
+        setFormData(prev => ({
+          ...prev,
+          mediaFiles: prev.mediaFiles.map((f, i) =>
+            i === currentIndex ? {
+              ...f,
+              uploadStatus: 'error',
+              uploadError: error instanceof Error ? error.message : 'Erreur inconnue'
+            } : f
+          )
+        }));
+
+        toast.error(`Erreur lors de l'upload de ${file.name}`);
+      }
+    }
 
     // Reset l'input
     event.target.value = '';
@@ -496,6 +556,19 @@ useEffect(() => {
       return;
     }
 
+    // Vérifier que toutes les images sont uploadées
+    const uploadingFiles = formData.mediaFiles.filter(f => f.uploadStatus === 'uploading');
+    if (uploadingFiles.length > 0) {
+      toast.error('Veuillez attendre que tous les fichiers soient uploadés');
+      return;
+    }
+
+    const failedFiles = formData.mediaFiles.filter(f => f.uploadStatus === 'error');
+    if (failedFiles.length > 0) {
+      toast.error('Certains fichiers n\'ont pas pu être uploadés. Supprimez-les ou réessayez.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -519,6 +592,10 @@ useEffect(() => {
         0 // pas de confirmations à la création
       );
 
+      // Utiliser l'URL de la première image uploadée (serveur)
+      const uploadedImages = formData.mediaFiles.filter(f => f.uploadStatus === 'uploaded' && f.uploadedImage);
+      const mediaUrl = uploadedImages.length > 0 ? uploadedImages[0].uploadedImage?.url : undefined;
+
       const alertData = {
         title: formData.title,
         ref_alert_id: generateEnhancedAlertRef(formData.category, urgencyAssessment === 'critical' ? 1 : urgencyAssessment === 'high' ? 2 : 3),
@@ -526,7 +603,7 @@ useEffect(() => {
         severity: urgencyAssessment,
         description: formData.description,
         location: formData.location,
-        mediaUrl: formData.mediaFiles.length > 0 ? formData.mediaFiles[0].url : undefined,
+        mediaUrl: mediaUrl, // ✅ URL serveur au lieu de blob
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).toISOString() : undefined,
         source: getSourceFromChannel(),
         status: formData.status,
@@ -535,15 +612,38 @@ useEffect(() => {
       };
 
       const response = await createManualAlert(alertData);
-      
+
       if (response.success) {
+        const alertId = response.data?.id;
+
+        // Lier les images à l'alerte
+        if (alertId && uploadedImages.length > 0) {
+          try {
+            // Récupérer le token d'authentification
+            const token = getToken();
+
+            for (const mediaFile of uploadedImages) {
+              if (mediaFile.uploadedImage) {
+                await updateImage(mediaFile.uploadedImage.id, {
+                  category: 'alert',
+                  // TODO: Ajouter alertId quand l'API le supportera
+                }, token || undefined);
+              }
+            }
+            console.log(`✅ ${uploadedImages.length} image(s) liée(s) à l'alerte ${alertId}`);
+          } catch (imageError) {
+            console.error('Erreur lors de la liaison des images:', imageError);
+            // Ne pas bloquer la création de l'alerte
+          }
+        }
+
         toast.success('Signalement créé avec succès', {
           description: `Référence: ${response.data?.ref_alert_id}`
         });
-        
+
         // Nettoyer les URLs d'objets
         formData.mediaFiles.forEach(file => URL.revokeObjectURL(file.url));
-        
+
         router.push('/dashboard/alerts');
       } else {
         toast.error('Erreur lors de la création', {
@@ -1463,9 +1563,9 @@ useEffect(() => {
                 )}
               </Button>
             </div>
-            {formData.location.coordinates[0] !== 0 && (
+            {formData.location.coordinates.lat !== 0 && (
               <p className="text-xs text-gray-500 mt-1">
-                Coordonnées: {formData.location.coordinates[0].toFixed(6)}, {formData.location.coordinates[1].toFixed(6)}
+                Coordonnées: {formData.location.coordinates.lat.toFixed(6)}, {formData.location.coordinates.lng.toFixed(6)}
               </p>
             )}
             {!googleMapsLoaded && (
@@ -1522,7 +1622,35 @@ useEffect(() => {
                     >
                       <X className="h-3 w-3" />
                     </Button>
-                    
+
+                    {/* Status badge */}
+                    <div className="absolute top-2 left-2 z-10">
+                      {mediaFile.uploadStatus === 'pending' && (
+                        <Badge className="bg-gray-500 text-white text-xs">
+                          <Loader2 className="h-3 w-3 mr-1" />
+                          En attente
+                        </Badge>
+                      )}
+                      {mediaFile.uploadStatus === 'uploading' && (
+                        <Badge className="bg-blue-500 text-white text-xs">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Upload...
+                        </Badge>
+                      )}
+                      {mediaFile.uploadStatus === 'uploaded' && (
+                        <Badge className="bg-green-500 text-white text-xs">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Uploadé
+                        </Badge>
+                      )}
+                      {mediaFile.uploadStatus === 'error' && (
+                        <Badge className="bg-red-500 text-white text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Erreur
+                        </Badge>
+                      )}
+                    </div>
+
                     {mediaFile.type === 'image' && (
                       <img
                         src={mediaFile.url}
@@ -1530,7 +1658,7 @@ useEffect(() => {
                         className="w-full h-32 object-cover"
                       />
                     )}
-                    
+
                     {mediaFile.type === 'video' && (
                       <video
                         src={mediaFile.url}
@@ -1538,7 +1666,7 @@ useEffect(() => {
                         controls
                       />
                     )}
-                    
+
                     {mediaFile.type === 'audio' && (
                       <div className="w-full h-32 bg-gray-100 flex items-center justify-center">
                         <div className="text-center">
@@ -1547,9 +1675,16 @@ useEffect(() => {
                         </div>
                       </div>
                     )}
-                    
-                    <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
-                      {mediaFile.file.name}
+
+                    <div className="p-2 bg-gray-50 space-y-1">
+                      <p className="text-xs text-gray-600 truncate">
+                        {mediaFile.file.name}
+                      </p>
+                      {mediaFile.uploadError && (
+                        <p className="text-xs text-red-600 truncate" title={mediaFile.uploadError}>
+                          {mediaFile.uploadError}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

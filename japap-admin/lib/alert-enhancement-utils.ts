@@ -104,13 +104,13 @@ function calculateEstimatedResolutionTime(category: string, priority: number): n
  * Enrichit les données de localisation avec Google Places
  */
 export async function enrichLocationData(
-  address: string, 
-  coordinates: [number, number]
+  address: string,
+  coordinates: { lat: number; lng: number }
 ): Promise<EnhancedLocation> {
   try {
     // En production, utiliser l'API Google Places ici
     const mockPlaceDetails = await mockGooglePlacesCall(coordinates);
-    
+
     return {
       address,
       coordinates,
@@ -126,7 +126,7 @@ export async function enrichLocationData(
     };
   } catch (error) {
     console.error('Erreur enrichissement localisation:', error);
-    
+
     // Fallback avec données minimales
     return {
       address,
@@ -142,12 +142,12 @@ export async function enrichLocationData(
 /**
  * Mock de l'appel Google Places (remplacer par vraie API)
  */
-async function mockGooglePlacesCall(coordinates: [number, number]) {
+async function mockGooglePlacesCall(coordinates: { lat: number; lng: number }) {
   // Simulation d'un appel API
   await new Promise(resolve => setTimeout(resolve, 100));
-  
+
   return {
-    place_id: `place_${coordinates[0]}_${coordinates[1]}`,
+    place_id: `place_${coordinates.lat}_${coordinates.lng}`,
     neighborhood: 'Centre-ville',
     city: 'Yaoundé',
     region: 'Centre',
@@ -192,11 +192,11 @@ export function calculateConfidenceScore(
 /**
  * Détermine le contexte météo (à connecter à une API météo)
  */
-export async function getWeatherContext(coordinates: [number, number]): Promise<IncidentContext['weather']> {
+export async function getWeatherContext(coordinates: { lat: number; lng: number }): Promise<IncidentContext['weather']> {
   try {
     // En production, connecter à OpenWeatherMap ou similar
     const mockWeather = await mockWeatherCall(coordinates);
-    
+
     return {
       condition: mockWeather.condition,
       temperature: mockWeather.temperature,
@@ -207,9 +207,9 @@ export async function getWeatherContext(coordinates: [number, number]): Promise<
   }
 }
 
-async function mockWeatherCall(coordinates: [number, number]) {
+async function mockWeatherCall(coordinates: { lat: number; lng: number }) {
   await new Promise(resolve => setTimeout(resolve, 50));
-  
+
   // Mock data pour Yaoundé
   return {
     condition: 'sunny',
@@ -253,23 +253,24 @@ export function generateEnhancedAlertRef(
  */
 export function validateAlertData(alertData: any): { isValid: boolean; errors: string[] } {
   const errors: string[] = [];
-  
+
   // Validations basiques
   if (!alertData.category) errors.push('Catégorie requise');
   if (!alertData.description?.trim()) errors.push('Description requise');
   if (!alertData.location?.address?.trim()) errors.push('Adresse requise');
-  
-  // Validations coordonnées
-  const [lat, lng] = alertData.location?.coordinates || [0, 0];
+
+  // Validations coordonnées (format objet)
+  const lat = alertData.location?.coordinates?.lat || 0;
+  const lng = alertData.location?.coordinates?.lng || 0;
   if (lat === 0 && lng === 0) errors.push('Coordonnées GPS requises');
   if (lat < -90 || lat > 90) errors.push('Latitude invalide');
   if (lng < -180 || lng > 180) errors.push('Longitude invalide');
-  
+
   // Validation Cameroun (approximative)
   if (lat < 1.5 || lat > 13.5 || lng < 8.5 || lng > 16.5) {
     errors.push('Les coordonnées semblent être en dehors du Cameroun');
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
