@@ -33,6 +33,30 @@
           "apiKey": "AIzaSyCuKs4ucoYrHcU16fsZJw9dP2BsrXR9LyQ"
         }
       },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.joker95.japap"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "package": "com.joker95.japap"
     },
     "web": {
@@ -65,6 +89,7 @@
         "projectId": "35380180-c2e9-423c-897f-b3c7a98593a8"
       }
     },
+    
     "owner": "joker95"
   }
 }

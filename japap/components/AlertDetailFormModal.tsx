@@ -59,6 +59,15 @@ export default function AlertDetailFormModal({
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isHappeningNow, setIsHappeningNow] = useState(true);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+
+  // Default coordinates: center of Côte d'Ivoire with wide view to show entire country
+  const [mapCoordinates, setMapCoordinates] = useState({
+    lat: 7.54,    // Centre de la Côte d'Ivoire
+    lng: -5.55,   // Centre de la Côte d'Ivoire
+    latitudeDelta: 6,  // Wide zoom to show entire Côte d'Ivoire (~600-700km)
+    longitudeDelta: 6,
+  });
 
   // Audio recording with expo-audio hook
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -81,9 +90,12 @@ export default function AlertDetailFormModal({
   // Get current location with improved error handling
   const getCurrentLocation = async () => {
     try {
+      setIsLoadingLocation(false);
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         showToast('Permission de localisation refusée', 'error');
+        setIsLoadingLocation(false);
         return;
       }
 
@@ -97,16 +109,28 @@ export default function AlertDetailFormModal({
         ? `${address[0].street || ''}, ${address[0].city || ''}, ${address[0].region || ''}`
         : 'Position actuelle';
 
+      const newCoordinates = {
+        lat: currentLocation.coords.latitude,
+        lng: currentLocation.coords.longitude,
+      };
+
       setLocation({
         address: addressStr,
-        coordinates: {
-          lat: currentLocation.coords.latitude,
-          lng: currentLocation.coords.longitude,
-        },
+        coordinates: newCoordinates,
       });
+
+      // Update map coordinates with precise zoom to trigger zoom in animation
+      setMapCoordinates({
+        lat: currentLocation.coords.latitude,
+        lng: currentLocation.coords.longitude,
+        latitudeDelta: 0.002,  // Precise zoom (~200m)
+        longitudeDelta: 0.002,
+      });
+      setIsLoadingLocation(false);
     } catch (error) {
       console.error('Error getting location:', error);
       showToast('Erreur lors de la récupération de la position', 'error');
+      setIsLoadingLocation(false);
     }
   };
 
@@ -353,23 +377,19 @@ export default function AlertDetailFormModal({
                 </TouchableOpacity>
               </View>
 
-              {/* Mini Map */}
-              {location?.coordinates ? (
-                <View style={styles.mapContainer}>
-                  <MiniMapView
-                    latitude={location.coordinates.lat}
-                    longitude={location.coordinates.lng}
-                    markerColor={theme.colors.primary}
-                    height={150}
-                    borderRadius={12}
-                  />
-                </View>
-              ) : (
-                <View style={[styles.mapPlaceholder, { backgroundColor: theme.colors.surfaceVariant, borderColor: theme.colors.border }]}>
-                  <Ionicons name="map" size={40} color={theme.colors.icon} />
-                  <Text style={[styles.mapPlaceholderText, { color: theme.colors.secondaryText }]}>Chargement de la position...</Text>
-                </View>
-              )}
+              {/* Mini Map - Always visible with default location, then animates to actual position */}
+              <View style={styles.mapContainer}>
+                <MiniMapView
+                  latitude={mapCoordinates.lat}
+                  longitude={mapCoordinates.lng}
+                  latitudeDelta={mapCoordinates.latitudeDelta}
+                  longitudeDelta={mapCoordinates.longitudeDelta}
+                  markerColor={theme.colors.primary}
+                  height={150}
+                  borderRadius={12}
+                  isLoading={isLoadingLocation}
+                />
+              </View>
 
                {/* Time Section */}
               <View >
@@ -410,7 +430,7 @@ export default function AlertDetailFormModal({
             {/* Details Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>Détails</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>Description</Text>
                 {/* Bouton micro */}
                 {!audioRecorderState.isRecording ? (
                   <TouchableOpacity
