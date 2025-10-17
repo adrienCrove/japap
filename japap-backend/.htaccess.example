@@ -1,0 +1,60 @@
+# ============================================
+# .htaccess pour l'API d'upload d'images
+# ============================================
+#
+# Ce fichier permet de contourner les règles mod_security
+# trop strictes qui bloquent les uploads d'images.
+#
+# IMPORTANT: À placer sur votre serveur distant (japap.adxcreation.com)
+# dans le dossier racine de l'API d'images.
+#
+# Usage:
+# 1. Renommer ce fichier en ".htaccess" (sans le .example)
+# 2. L'uploader via FTP/cPanel dans le dossier de l'API
+# 3. Vérifier les permissions (644)
+#
+
+<IfModule mod_security.c>
+    # Désactiver mod_security UNIQUEMENT pour l'endpoint /upload
+    <LocationMatch "^/upload">
+        SecRuleEngine Off
+    </LocationMatch>
+
+    # OU utiliser une approche plus sélective :
+    # Désactiver uniquement certaines règles problématiques
+    SecRuleRemoveById 406
+    SecRuleRemoveById 950907
+    SecRuleRemoveById 950901
+
+    # Augmenter les limites pour les uploads
+    SecRequestBodyLimit 15728640
+    SecRequestBodyNoFilesLimit 131072
+</IfModule>
+
+# Autoriser les requêtes POST multipart/form-data
+<FilesMatch ".*">
+    # Désactiver certaines règles OWASP qui bloquent les uploads
+    <IfModule mod_security2.c>
+        SecRuleRemoveById 920350
+        SecRuleRemoveById 921180
+        SecRuleRemoveById 942430
+        SecRuleRemoveById 942431
+    </IfModule>
+</FilesMatch>
+
+# Configuration CORS si nécessaire
+<IfModule mod_headers.c>
+    # Autoriser les requêtes depuis votre domaine backend
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "POST, GET, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "x-api-key, Content-Type, Accept, User-Agent"
+    Header set Access-Control-Max-Age "3600"
+</IfModule>
+
+# Augmenter les limites PHP pour les uploads
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value memory_limit 128M
+    php_value max_execution_time 60
+</IfModule>

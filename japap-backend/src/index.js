@@ -3,7 +3,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
-const domain = process.env.IP_ADDRESS_LOCAL || 'http://10.102.16.57';
+const domain = process.env.IP_ADDRESS_LOCAL || 'http://192.168.1.64';
 const port = process.env.PORT || 4000;
 
 // Importer le service Telegram
@@ -21,6 +21,7 @@ const broadcastRoutes = require('./routes/broadcast');
 const authRoutes = require('./routes/authRoutes');
 const interestsRoutes = require('./routes/interests');
 const categoryAlertsRoutes = require('./routes/categoryAlerts');
+const transcriptionRoutes = require('./routes/transcription');
 
 // Middlewares
 app.use(cors()); // Activer CORS pour toutes les routes
@@ -42,6 +43,7 @@ app.use('/api/broadcast', broadcastRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/interests', interestsRoutes);
 app.use('/api/category-alerts', categoryAlertsRoutes);
+app.use('/api/transcribe', transcriptionRoutes);
 
 
 app.get('/', (req, res) => {

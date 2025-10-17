@@ -6,7 +6,18 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pm2:dev": "pm2 start ecosystem.config.js --env development",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop japap-backend",
+    "pm2:restart": "pm2 restart japap-backend",
+    "pm2:reload": "pm2 reload japap-backend",
+    "pm2:delete": "pm2 delete japap-backend",
+    "pm2:logs": "pm2 logs japap-backend",
+    "pm2:monit": "pm2 monit",
+    "pm2:status": "pm2 status",
+    "pm2:save": "pm2 save",
+    "pm2:startup": "pm2 startup"
   },
   "keywords": [
     "japap",
@@ -30,6 +41,7 @@
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.66.0",
+    "openai": "^6.4.0",
     "pg": "^8.11.3",
     "prisma": "^6.13.0",
     "redis": "^4.6.10",
@@ -37,6 +49,7 @@
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "pm2": "^5.4.3"
   }
 }
