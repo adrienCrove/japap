@@ -1,0 +1,147 @@
+# Test E2E: Création d'une alerte (Happy Path)
+# Description: Test complet du flow de création d'alerte depuis la sélection de catégorie jusqu'à la confirmation
+
+appId: com.joker95.japap
+---
+# ========================================
+# PHASE 1: CONNEXION
+# ========================================
+- runScript: echo "📝 Test E2E: Création d'alerte"
+- runScript: echo "🔐 Phase 1: Connexion"
+
+- runFlow: login.yaml
+
+- runScript: echo "✅ Phase 1 terminée: Utilisateur connecté"
+
+# ========================================
+# PHASE 2: NAVIGATION VERS CRÉATION
+# ========================================
+- runScript: echo "🗺️ Phase 2: Navigation vers création d'alerte"
+
+# Aller sur l'onglet "Créer"
+- tapOn:
+    id: "tab-create"
+- waitForAnimationToEnd
+
+# Vérifier que le modal de sélection de catégorie est visible
+- assertVisible:
+    text: "Que se passe-t-il"
+    timeout: 5000
+
+- assertVisible:
+    id: "category-modal-title"
+
+- runScript: echo "✅ Phase 2 terminée: Modal de sélection visible"
+
+# ========================================
+# PHASE 3: SÉLECTION DE CATÉGORIE
+# ========================================
+- runScript: echo "📋 Phase 3: Sélection d'une catégorie d'alerte"
+
+# Attendre que les catégories soient chargées
+- waitForAnimationToEnd
+
+# Sélectionner la catégorie "Accident grave circulation" (code: ACCG)
+- tapOn:
+    id: "category-card-ACCG"
+- waitForAnimationToEnd
+
+# Vérifier que le formulaire de détails s'affiche
+- assertVisible:
+    text: "Signalement"
+    timeout: 3000
+
+- assertVisible:
+    id: "alert-description-input"
+
+- runScript: echo "✅ Phase 3 terminée: Catégorie sélectionnée"
+
+# ========================================
+# PHASE 4: VÉRIFICATION LOCALISATION
+# ========================================
+- runScript: echo "📍 Phase 4: Vérification de la localisation"
+
+# Attendre que la localisation soit récupérée
+- waitForAnimationToEnd:
+    timeout: ${LOCATION_TIMEOUT}
+
+# Vérifier que le texte de localisation est visible
+- assertVisible:
+    id: "alert-location-text"
+
+# Vérifier que la localisation n'est pas "Chargement..."
+- assertNotVisible:
+    text: "Chargement..."
+
+- runScript: echo "✅ Phase 4 terminée: Localisation récupérée"
+
+# ========================================
+# PHASE 5: REMPLIR LE FORMULAIRE
+# ========================================
+- runScript: echo "✍️ Phase 5: Remplissage du formulaire"
+
+# Remplir la description
+- tapOn:
+    id: "alert-description-input"
+- inputText: "Test automatique Maestro - Accident grave sur l'autoroute A1 direction nord. Plusieurs véhicules impliqués. Embouteillage important."
+
+- runScript: echo "✅ Phase 5 terminée: Formulaire rempli"
+
+# ========================================
+# PHASE 6: SOUMETTRE L'ALERTE
+# ========================================
+- runScript: echo "📤 Phase 6: Soumission de l'alerte"
+
+# Faire défiler vers le bas pour voir le bouton Envoyer
+- scroll
+
+# Appuyer sur le bouton "Envoyer"
+- tapOn:
+    id: "alert-submit-button"
+
+# Attendre le traitement (création + possiblement upload)
+- waitForAnimationToEnd:
+    timeout: ${NETWORK_TIMEOUT}
+
+- runScript: echo "✅ Phase 6 terminée: Alerte soumise"
+
+# ========================================
+# PHASE 7: VÉRIFICATION DU SUCCÈS
+# ========================================
+- runScript: echo "✅ Phase 7: Vérification de la création"
+
+# Vérifier le toast de succès
+- assertVisible:
+    text: "Alerte créée avec succès"
+    timeout: 5000
+
+# Attendre que le toast disparaisse et que la navigation se fasse
+- waitForAnimationToEnd
+
+# Vérifier qu'on est revenu à l'écran d'accueil ou alertes
+- assertVisible:
+    id: "tab-alerts"
+
+- runScript: echo "✅ Phase 7 terminée: Alerte créée avec succès!"
+
+# ========================================
+# PHASE 8: VÉRIFICATION DANS LA LISTE
+# ========================================
+- runScript: echo "📋 Phase 8: Vérification de l'alerte dans la liste"
+
+# Aller sur l'onglet Alertes
+- tapOn:
+    id: "tab-alerts"
+- waitForAnimationToEnd
+
+# Vérifier que la nouvelle alerte apparaît
+- assertVisible:
+    text: "Test automatique Maestro"
+    timeout: 5000
+
+- runScript: echo "✅ Phase 8 terminée: Alerte visible dans la liste"
+
+# ========================================
+# TEST TERMINÉ
+# ========================================
+- runScript: echo "🎉 Test E2E réussi: Alerte créée et visible!"

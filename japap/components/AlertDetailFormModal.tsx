@@ -20,9 +20,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createAlert, type CategoryAlert, type AlertLocation, type CreateAlertData } from '@/services/api';
 import { pickImageFromGallery, pickImageFromCamera, uploadImage } from '@/services/imageUpload';
+import { getLocationWithAddress } from '@/services/locationService';
+import {
+  transcribeAudio,
+  formatDuration,
+  requestRecordingPermissionsAsync,
+  useAudioRecorderState,
+} from '@/services/audioTranscription';
+import { useAudioRecorder, RecordingPresets } from 'expo-audio';
 import LoadingModal from '@/components/LoadingModal';
 import Toast from '@/components/Toast';
 import MiniMapView from '@/components/map/MiniMapView';
+
 
 interface AlertDetailFormModalProps {
   visible: boolean;
@@ -51,6 +60,11 @@ export default function AlertDetailFormModal({
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isHappeningNow, setIsHappeningNow] = useState(true);
 
+  // Audio recording with expo-audio hook
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorderState = useAudioRecorderState(audioRecorder);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -64,7 +78,7 @@ export default function AlertDetailFormModal({
     setToast({ visible: true, message, type });
   };
 
-  // Get current location
+  // Get current location with improved error handling
   const getCurrentLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -140,6 +154,79 @@ export default function AlertDetailFormModal({
     if (image) {
       setImageUri(image.uri);
       setUploadedImageUrl(null);
+    }
+  };
+
+  // Audio recording handlers
+  const handleStartRecording = async () => {
+    try {
+      // Demander les permissions
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        showToast('Permission microphone refusée', 'error');
+        return;
+      }
+
+      console.log('🎙️ Démarrage de l\'enregistrement...');
+
+      // Préparer et démarrer l'enregistrement
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+
+      console.log('✅ Enregistrement démarré');
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      showToast('Erreur lors du démarrage de l\'enregistrement', 'error');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    try {
+      console.log('🛑 Arrêt de l\'enregistrement...');
+
+      // Arrêter l'enregistrement
+      await audioRecorder.stop();
+
+      const uri = audioRecorder.uri;
+
+      if (!uri) {
+        showToast('Impossible de récupérer l\'enregistrement', 'error');
+        return;
+      }
+
+      console.log(`✅ Enregistrement arrêté: ${uri}`);
+
+      // Transcrire l'audio
+      setIsTranscribing(true);
+      setLoadingMessage('Transcription en cours...');
+
+      const transcriptionResult = await transcribeAudio(uri, 'fr');
+
+      if (transcriptionResult.success && transcriptionResult.text) {
+        // Ajouter le texte transcrit à la description existante
+        const newText = description
+          ? `${description}\n${transcriptionResult.text}`
+          : transcriptionResult.text;
+        setDescription(newText);
+        showToast('Transcription réussie !', 'success');
+      } else {
+        showToast(transcriptionResult.error || 'Erreur lors de la transcription', 'error');
+      }
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      showToast('Erreur lors de l\'arrêt de l\'enregistrement', 'error');
+    } finally {
+      setIsTranscribing(false);
+      setLoadingMessage('');
+    }
+  };
+
+  const handleCancelRecording = async () => {
+    try {
+      console.log('❌ Annulation de l\'enregistrement');
+      await audioRecorder.stop();
+    } catch (error) {
+      console.error('Error canceling recording:', error);
     }
   };
 
@@ -226,7 +313,7 @@ export default function AlertDetailFormModal({
         {/* Header */}
         <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.borderLight }]}>
           <View style={styles.headerTop}>
-            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <TouchableOpacity testID="alert-back-button" onPress={onBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.colors.primaryText} />
             </TouchableOpacity>
             {/*<TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: theme.colors.surfaceVariant }]}>
@@ -250,9 +337,18 @@ export default function AlertDetailFormModal({
               <View style={[styles.locationCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                 <View style={styles.locationInfo}>
                   <Ionicons name="location" size={24} color={theme.colors.primary} />
-                  <Text style={[styles.locationText, { color: theme.colors.primaryText }]}>{location?.address || 'Chargement...'}</Text>
+                  <Text
+                    testID="alert-location-text"
+                    style={[styles.locationText, { color: theme.colors.primaryText }]}
+                  >
+                    {location?.address || 'Chargement...'}
+                  </Text>
                 </View>
-                <TouchableOpacity onPress={getCurrentLocation} style={[styles.recenterButton, { backgroundColor: theme.colors.primary }]}>
+                <TouchableOpacity
+                  testID="alert-location-button"
+                  onPress={getCurrentLocation}
+                  style={[styles.recenterButton, { backgroundColor: theme.colors.primary }]}
+                >
                   <Ionicons name="navigate" size={20} color="#fff" />
                 </TouchableOpacity>
               </View>
@@ -313,8 +409,42 @@ export default function AlertDetailFormModal({
 
             {/* Details Section */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>Détails</Text>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>Détails</Text>
+                {/* Bouton micro */}
+                {!audioRecorderState.isRecording ? (
+                  <TouchableOpacity
+                    testID="alert-record-button"
+                    onPress={handleStartRecording}
+                    style={[styles.micButton, { backgroundColor: theme.colors.primary }]}
+                    disabled={isTranscribing}
+                  >
+                    <Ionicons name="mic" size={20} color="#fff" />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.recordingControls}>
+                    <View style={[styles.recordingIndicator, { backgroundColor: theme.colors.primary }]}>
+                      <View style={styles.recordingDot} />
+                      <Text style={styles.recordingTime}>{formatDuration(audioRecorderState.durationMillis)}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleCancelRecording}
+                      style={[styles.cancelButton, { backgroundColor: theme.colors.surfaceVariant }]}
+                    >
+                      <Ionicons name="close" size={20} color={theme.colors.primaryText} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleStopRecording}
+                      style={[styles.stopButton, { backgroundColor: theme.colors.primary }]}
+                    >
+                      <Ionicons name="stop" size={20} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
               <TextInput
+                testID="alert-description-input"
                 style={[styles.textArea, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, color: theme.colors.primaryText }]}
                 placeholder="Partagez des détails supplémentaires..."
                 placeholderTextColor={theme.colors.secondaryText}
@@ -323,7 +453,16 @@ export default function AlertDetailFormModal({
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
+                editable={!audioRecorderState.isRecording && !isTranscribing}
               />
+
+              {isTranscribing && (
+                <View style={styles.transcribingIndicator}>
+                  <Text style={[styles.transcribingText, { color: theme.colors.secondaryText }]}>
+                    Transcription en cours...
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Photo Section */}
@@ -337,7 +476,11 @@ export default function AlertDetailFormModal({
                   </TouchableOpacity>
                 </View>
               ) : (
-                <TouchableOpacity style={[styles.photoButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]} onPress={handleImagePicker}>
+                <TouchableOpacity
+                  testID="alert-photo-button"
+                  style={[styles.photoButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                  onPress={handleImagePicker}
+                >
                   <Ionicons name="camera" size={28} color={theme.colors.primaryText} />
                   <Text style={[styles.photoButtonText, { color: theme.colors.primaryText }]}>Ajouter une photo</Text>
                 </TouchableOpacity>
@@ -349,7 +492,12 @@ export default function AlertDetailFormModal({
 
         {/* Bottom Button */}
         <View style={[styles.bottomContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.borderLight }]}>
-          <TouchableOpacity style={[styles.sendButton, { backgroundColor: theme.colors.primary }]} onPress={handleSubmit} disabled={isLoading}>
+          <TouchableOpacity
+            testID="alert-submit-button"
+            style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
+            onPress={handleSubmit}
+            disabled={isLoading}
+          >
             <Text style={styles.sendButtonText}>Envoyer</Text>
           </TouchableOpacity>
           <Text style={[styles.notificationText, { color: theme.colors.secondaryText }]}>Les utilisateurs à proximité seront notifiés</Text>
@@ -426,6 +574,76 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     fontFamily: 'SUSE',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  // Audio recording styles
+  micButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#E94F23',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recordingControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ff0000',
+  },
+  recordingTime: {
+    fontSize: 14,
+    color: '#fff',
+    fontFamily: 'Lato',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stopButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transcribingIndicator: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  transcribingText: {
+    fontSize: 14,
+    fontFamily: 'Lato',
+    fontStyle: 'italic',
   },
   locationCard: {
     flexDirection: 'row',

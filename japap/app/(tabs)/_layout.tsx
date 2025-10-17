@@ -48,6 +48,7 @@ export default function TabLayout() {
         name="create"
         options={{
           title: '',
+          tabBarTestID: 'tab-create',
           tabBarIcon: ({ color }) => (
             <View style={styles.createButton}>
               <Ionicons name="add" size={32} color="#fff" />
@@ -59,6 +60,7 @@ export default function TabLayout() {
         name="alerts"
         options={{
           title: 'Alertes',
+          tabBarTestID: 'tab-alerts',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={24} color={color} />
           ),

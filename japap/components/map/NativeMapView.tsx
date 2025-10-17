@@ -92,6 +92,10 @@ export default function NativeMapView({
       showsMyLocationButton={false}
       showsCompass={true}
       showsScale={true}
+      showsTraffic={true}  // ✅ Active le trafic en temps réel
+      showsIndoors={false}
+      showsBuildings={false}
+      showsIndoorLevelPicker={false}
     >
       {alerts
         .filter(alert => alert.location?.lat && alert.location?.lng)

@@ -1,0 +1,62 @@
+# Flow de connexion réutilisable pour les tests JAPAP
+# Ce flow peut être appelé depuis d'autres tests avec: runFlow: login.yaml
+
+appId: com.joker95.japap
+---
+# Étape 1: Lancer l'application
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# Étape 2: Attendre que l'app soit prête
+- waitForAnimationToEnd
+
+# Étape 3: Vérifier si déjà connecté
+- runFlow:
+    when:
+      visible:
+        id: "tab-create"
+    commands:
+      # Déjà connecté, ne rien faire
+      - assertVisible:
+          id: "tab-create"
+      - stopFlow
+
+# Étape 4: Navigation vers l'authentification (si pas connecté)
+# Assumption: Il y a un écran d'accueil ou un bouton "Se connecter"
+- tapOn:
+    text: "Se connecter|Connexion|Login"
+- waitForAnimationToEnd
+
+# Étape 5: Vérifier présence de l'écran de connexion
+- assertVisible: "Connexion|Se connecter|Bienvenue"
+
+# Étape 6: Entrer l'email ou téléphone
+- tapOn:
+    id: "login-input-email"
+- inputText: "${TEST_EMAIL}"
+
+# Étape 7: Appuyer sur "Suivant" ou aller au champ password
+- tapOn:
+    text: "Suivant|Continuer"
+- waitForAnimationToEnd
+
+# Étape 8: Entrer le mot de passe
+- tapOn:
+    id: "login-input-password"
+- inputText: "${TEST_PASSWORD}"
+
+# Étape 9: Appuyer sur le bouton de connexion
+- tapOn:
+    id: "login-submit-button"
+
+# Étape 10: Attendre la connexion
+- waitForAnimationToEnd
+
+# Étape 11: Vérifier que la connexion a réussi
+- assertVisible:
+    id: "tab-create"
+    timeout: ${NETWORK_TIMEOUT}
+
+# Étape 12: Message de succès
+- runScript: echo "✅ Connexion réussie avec ${TEST_EMAIL}"

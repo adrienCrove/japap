@@ -85,7 +85,11 @@ export default function CategorySelectionModal({
               <Ionicons name="layers" size={24} color={theme.colors.primary} />
               <Text style={[styles.brandText, { color: theme.colors.primaryText }]}>Incidents</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <TouchableOpacity
+              testID="category-close-button"
+              onPress={onClose}
+              style={[styles.closeButton, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
               <Ionicons name="close" size={28} color={theme.colors.icon} />
             </TouchableOpacity>
           </View>
@@ -94,7 +98,12 @@ export default function CategorySelectionModal({
         {/* Content */}
         <ScrollView style={[styles.content, { backgroundColor: theme.colors.background }]} showsVerticalScrollIndicator={false}>
           <View style={styles.titleContainer}>
-            <Text style={[styles.title, { color: theme.colors.primaryText }]}>Que se passe-t-il ?</Text>
+            <Text
+              testID="category-modal-title"
+              style={[styles.title, { color: theme.colors.primaryText }]}
+            >
+              Que se passe-t-il ?
+            </Text>
             <Text style={[styles.subtitle, { color: theme.colors.secondaryText }]}>
               Créez une alerte pour notifier les utilisateurs à proximité.
             </Text>
@@ -114,6 +123,7 @@ export default function CategorySelectionModal({
               {categories.map((category) => (
                 <TouchableOpacity
                   key={category.id}
+                  testID={`category-card-${category.code}`}
                   style={[
                     styles.categoryCard,
                     {

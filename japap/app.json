@@ -14,9 +14,9 @@
       "backgroundColor": "#FFC645"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "AIzaSyCuKs4ucoYrHcU16fsZJw9dP2BsrXR9LyQ"
       }
     },
     "android": {
@@ -30,9 +30,10 @@
       "predictiveBackGestureEnabled": false,
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyCuKs4ucoYrHcU16fsZJw9dP2BsrXR9LyQ"
         }
-      }
+      },
+      "package": "com.joker95.japap"
     },
     "web": {
       "output": "static",
@@ -51,7 +52,8 @@
             "backgroundColor": "#FFC645"
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

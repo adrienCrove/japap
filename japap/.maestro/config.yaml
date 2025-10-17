@@ -1,0 +1,29 @@
+# Configuration globale Maestro pour JAPAP
+# Documentation: https://maestro.mobile.dev/
+
+env:
+  # URL du backend (peut être overridé par une variable d'environnement)
+  API_URL: EXPO_PUBLIC_API_URL  # 10.0.2.2 = localhost depuis émulateur Android
+
+  # Credentials de l'utilisateur de test
+  TEST_EMAIL: "maestro-test@japap.com"
+  TEST_PHONE: "+237600000000"
+  TEST_PASSWORD: "TestPassword123!"
+
+  # Timeouts par défaut (en millisecondes)
+  DEFAULT_TIMEOUT: 10000
+  NETWORK_TIMEOUT: 15000
+  LOCATION_TIMEOUT: 8000
+
+# Configuration globale
+tags:
+  - e2e
+  - mobile
+  - japap
+
+# Retry configuration
+onFlowStart:
+  - runScript: echo "🚀 Démarrage du test E2E JAPAP"
+
+onFlowComplete:
+  - runScript: echo "✅ Test E2E JAPAP terminé"
