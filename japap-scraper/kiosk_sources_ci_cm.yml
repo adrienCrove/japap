@@ -1,0 +1,350 @@
+
+version: 1
+last_updated: 2025-10-22
+notes: >
+  Liste de sources d'information pour le Kiosque Japap.
+  Les URLs de flux RSS ne sont pas toutes renseignées : activer feed_autodiscovery pour trouver automatiquement les flux.
+  Toujours respecter robots.txt et renvoyer l'utilisateur vers l'article original.
+categories:
+  - Sécurité
+  - Transports
+  - Météo
+  - Santé
+  - Catastrophes
+  - Infrastructure
+  - Justice
+defaults:
+  scrape:
+    method: rss_or_html           # essaie RSS sinon fallback HTML (extraction Readability)
+    respect_robots_txt: true
+    user_agent: JapapKioskBot/1.0
+    max_requests_per_minute: 30
+  summarization:
+    enabled: true
+    target_chars: 260
+    citations: 3
+  geotag:
+    enabled: true
+  dedup:
+    window_hours: 48
+  link_policy: always_link_original
+  credibility: 0.8                # valeur par défaut si inconnue
+
+countries:
+  - code: CI
+    region: "Abidjan (focus)"
+    sources:
+      - id: abidjan_net
+        name: "Abidjan.net"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: portal
+        homepage: "https://www.abidjan.net"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Météo, Santé, Catastrophes, Infrastructure]
+        credibility: 0.8
+        enabled: true
+
+      - id: aip_ci
+        name: "Agence Ivoirienne de Presse (AIP)"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: news_agency
+        homepage: "https://www.aip.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Santé, Catastrophes, Justice]
+        credibility: 1.0
+        enabled: true
+
+      - id: fraternite_matin
+        name: "Fraternité Matin (Fratmat)"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: national_daily
+        homepage: "https://www.fratmat.info"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Météo, Santé, Justice]
+        credibility: 0.9
+        enabled: true
+
+      - id: rti_info
+        name: "RTI Info"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: public_broadcaster
+        homepage: "https://www.rti.ci"       # rtiinfo sous-domaine/section possible
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Météo, Santé]
+        credibility: 0.9
+        enabled: true
+
+      - id: linfodrome
+        name: "Linfodrome"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: pure_player
+        homepage: "https://www.linfodrome.com"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Justice]
+        credibility: 0.7
+        enabled: true
+
+      - id: 7info
+        name: "7info"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: pure_player
+        homepage: "https://www.7info.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Santé]
+        credibility: 0.7
+        enabled: true
+
+      - id: koaci_ci
+        name: "KOACI — Côte d’Ivoire"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: pan_african_portal
+        homepage: "https://www.koaci.com/cote-divoire"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Justice]
+        credibility: 0.7
+        enabled: true
+
+      - id: lintelligent
+        name: "L’Intelligent d’Abidjan"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.lintelligentdabidjan.info"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice, Transports]
+        credibility: 0.7
+        enabled: true
+
+      - id: linter
+        name: "L’Inter"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.linter.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice, Transports]
+        credibility: 0.7
+        enabled: true
+
+      - id: soir_info
+        name: "Soir Info"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.soirinfo.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice, Transports]
+        credibility: 0.7
+        enabled: true
+
+      - id: le_patriote
+        name: "Le Patriote"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.lepatriote.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: le_temps
+        name: "Le Temps"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.letempsinfos.com"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: connectionivoirienne
+        name: "Connectionivoirienne"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: pure_player
+        homepage: "https://connectionivoirienne.net"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports]
+        credibility: 0.6
+        enabled: true
+
+      - id: pressecotedivoire
+        name: "Presse Côte d’Ivoire (Titrologie)"
+        country: CI
+        city: Abidjan
+        languages: [fr]
+        type: aggregator
+        homepage: "https://pressecotedivoire.ci"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Justice]
+        credibility: 0.6
+        enabled: true
+
+  - code: CM
+    region: "Cameroun (national)"
+    sources:
+      - id: cameroon_tribune
+        name: "Cameroon Tribune"
+        country: CM
+        city: Yaoundé
+        languages: [fr, en]
+        type: national_daily
+        homepage: "https://www.cameroon-tribune.cm"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Santé, Infrastructure]
+        credibility: 0.9
+        enabled: true
+
+      - id: crtv_news
+        name: "CRTV / CRTV News"
+        country: CM
+        city: Yaoundé
+        languages: [fr, en]
+        type: public_broadcaster
+        homepage: "https://www.crtv.cm"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Météo]
+        credibility: 0.9
+        enabled: true
+
+      - id: journal_du_cameroun
+        name: "Journal du Cameroun"
+        country: CM
+        city: Yaoundé
+        languages: [fr, en]
+        type: pure_player
+        homepage: "https://www.journalducameroun.com"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Justice]
+        credibility: 0.8
+        enabled: true
+
+      - id: actu_cameroun
+        name: "ActuCameroun"
+        country: CM
+        city: Douala
+        languages: [fr]
+        type: pure_player
+        homepage: "https://actucameroun.com"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports]
+        credibility: 0.6
+        enabled: true
+
+      - id: cameroon_info
+        name: "Cameroon-Info.Net"
+        country: CM
+        city: Douala
+        languages: [fr]
+        type: pure_player
+        homepage: "https://www.cameroon-info.net"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports, Justice]
+        credibility: 0.7
+        enabled: true
+
+      - id: 237online
+        name: "237online"
+        country: CM
+        city: Douala
+        languages: [fr]
+        type: pure_player
+        homepage: "https://www.237online.com"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Transports]
+        credibility: 0.5
+        enabled: true
+
+      - id: le_jour_cm
+        name: "Le Jour"
+        country: CM
+        city: Yaoundé
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.journal-lejour.com"   # URL sujette à changement
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: le_messager
+        name: "Le Messager"
+        country: CM
+        city: Douala
+        languages: [fr]
+        type: private_daily
+        homepage: "https://lemessager.net"
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: mutations
+        name: "Mutations"
+        country: CM
+        city: Yaoundé
+        languages: [fr]
+        type: private_daily
+        homepage: "https://www.mutations.cm"   # URL sujette à changement
+        feed_autodiscovery: true
+        default_categories: [Sécurité, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: guardian_post
+        name: "The Guardian Post (EN)"
+        country: CM
+        city: Yaoundé
+        languages: [en]
+        type: private_daily
+        homepage: "https://guardianpostcameroon.com"  # URL sujette à changement
+        feed_autodiscovery: true
+        default_categories: [Security, Transport, Justice]
+        credibility: 0.6
+        enabled: true
+
+      - id: cameroon_news_agency
+        name: "Cameroon News Agency (CNA)"
+        country: CM
+        city: Buea
+        languages: [en]
+        type: news_agency
+        homepage: "https://cameroonnewsagency.com"
+        feed_autodiscovery: true
+        default_categories: [Security, Transport]
+        credibility: 0.7
+        enabled: true
+
+      - id: mimi_mefo_info
+        name: "Mimi Mefo Info (MMI)"
+        country: CM
+        city: Douala
+        languages: [en]
+        type: pure_player
+        homepage: "https://mimimefoinfos.com"
+        feed_autodiscovery: true
+        default_categories: [Security, Justice]
+        credibility: 0.6
+        enabled: true

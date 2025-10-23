@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modèles minimaux nécessaires pour le scraper
+model NewsArticle {
+  id              String   @id @default(uuid())
+  title           String
+  summary         String?  @db.Text
+  content         String   @db.Text
+  sourceUrl       String
+  sourceName      String
+  sourceId        String?
+  categories      String[]
+  primaryCategory String?
+  location        Json?
+  publishedAt     DateTime
+  scrapedAt       DateTime @default(now())
+  relevanceScore  Float?
+  priority        String   @default("medium")
+  imageUrl        String?
+  images          Json?
+  relatedAlertIds String[]
+  author          String?
+  tags            String[]
+  language        String   @default("fr")
+  isActive        Boolean  @default(true)
+  isVerified      Boolean  @default(false)
+  views           Int      @default(0)
+  slug            String?  @unique
+  externalId      String?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([scrapedAt])
+  @@index([primaryCategory])
+  @@index([relevanceScore])
+  @@index([sourceName])
+  @@index([isActive, publishedAt])
+  @@map("news_articles")
+}
+
+model NewsSource {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  url             String
+  type            String
+  category        String[]
+  location        Json?
+  isActive        Boolean   @default(true)
+  lastScraped     DateTime?
+  lastSuccess     DateTime?
+  lastError       String?
+  articleCount    Int       @default(0)
+  errorCount      Int       @default(0)
+  successRate     Float?
+  scrapingConfig  Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([lastScraped])
+  @@map("news_sources")
+}
