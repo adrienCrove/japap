@@ -27,8 +27,13 @@ model User {
   notifications   Notification[]
   subscriptions   Subscription[]
   userInterests   UserInterest[] // Relation vers les intérêts de l'utilisateur
-  images          Image[] // Images uploadées par l'utilisateur
-  uploadedImages  Image[]             @relation("UploadedImages") // Images uploadées par cet admin/user
+  images          Image[] // Images uploadées par l'utilisateur (DEPRECATED - use ownedMedia)
+  uploadedImages  Image[]             @relation("UploadedImages") // Images uploadées par cet admin/user (DEPRECATED - use uploadedMedia)
+
+  // Nouveau système media unifié
+  ownedMedia      Media[]         @relation("MediaOwner")
+  uploadedMedia   Media[]         @relation("MediaUploader")
+  transcriptions  Transcription[]
 }
 
 model Alert {
@@ -39,7 +44,7 @@ model Alert {
   severity               String?
   description            String?
   location               Json?
-  mediaUrl               String?
+  mediaUrl               String? // DEPRECATED - use media relation
   expiresAt              DateTime?
   status                 String              @default("active")
   createdAt              DateTime            @default(now())
@@ -52,7 +57,17 @@ model Alert {
   categoryAlert          CategoryAlert?      @relation(fields: [categoryAlertId], references: [id])
   confirmedBy            AlertConfirmation[]
   notifications          Notification[]
-  images                 Image[] // Images associées à cette alerte
+  images                 Image[] // Images associées à cette alerte (DEPRECATED - use media)
+
+  // Nouveau système media unifié
+  media      Media[]  @relation("AlertMedia")
+  imageCount Int      @default(0)
+  hasAudio   Boolean  @default(false)
+  hasVideo   Boolean  @default(false)
+
+  // Système de partage
+  isShared   Boolean   @default(false)
+  sharedAt   DateTime?
 
   @@index([categoryAlertId])
 }
@@ -235,7 +250,7 @@ model CategoryAlertInterest {
 // ============ IMAGE MANAGEMENT MODELS ============
 
 model Image {
-  id           String   @id @default(uuid())
+  id           String @id @default(uuid())
   filename     String // Nom du fichier stocké (avec timestamp)
   originalName String // Nom original du fichier uploadé
   path         String // Chemin relatif: /uploads/alerts/123/image.jpg
@@ -265,6 +280,13 @@ model Image {
   // Stockage
   storage String @default("local") // "local" ou "remote"
 
+  // AI Enhancement (Nano Banana / Gemini 2.5 Flash Image)
+  isEnhanced          Boolean @default(false) // Image améliorée par IA
+  originalImageId     String? // ID de l'image source (si celle-ci est une version améliorée)
+  originalImage       Image?  @relation("ImageEnhancement", fields: [originalImageId], references: [id], onDelete: SetNull)
+  enhancedVersions    Image[] @relation("ImageEnhancement") // Versions améliorées de cette image
+  enhancementMetadata Json? // { model: "gemini-2.5-flash-image", prompt: "...", processingTime: 3500, cost: 0.039 }
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -272,4 +294,272 @@ model Image {
   @@index([userId])
   @@index([category])
   @@index([createdAt])
+  @@index([isEnhanced])
+  @@index([originalImageId])
+}
+
+// ============ UNIFIED MEDIA SYSTEM ============
+
+// Model parent unifié pour tous les types de média
+model Media {
+  id          String   @id @default(uuid())
+
+  // Type et position dans l'alerte
+  type        MediaType // IMAGE | AUDIO | VIDEO
+  position    Int?      // 1-3 pour images, null pour audio/vidéo
+
+  // Relations
+  alertId     String?
+  alert       Alert?    @relation("AlertMedia", fields: [alertId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation("MediaOwner", fields: [userId], references: [id], onDelete: SetNull)
+  uploadedBy  String?
+  uploader    User?     @relation("MediaUploader", fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  // Stockage fichier principal
+  filename     String   // {mediaId}-original.{ext}
+  originalName String   // Nom du fichier uploadé par l'utilisateur
+  path         String   // /uploads/alerts/{alertId}/media/{mediaId}/original.jpg
+  url          String   // URL complète accessible
+  size         Int      // Bytes
+  mimeType     String   // image/jpeg, audio/mpeg, video/mp4
+
+  // Intégrité et sécurité
+  checksum     String   // SHA-256 pour détecter corruption/doublons
+  capturedAt   DateTime? // Timestamp de capture côté client (EXIF ou metadata)
+  receivedAt   DateTime  @default(now()) // Timestamp de réception serveur
+
+  // Métadonnées spécifiques (EXIF, codec, bitrate)
+  metadata     Json?    // Flexible pour chaque type
+
+  // Dimensions (images/vidéos)
+  width        Int?
+  height       Int?
+
+  // Durée (audio/vidéos) en secondes
+  duration     Float?   // Ex: 25.5s
+
+  // Workflow upload
+  uploadStatus UploadStatus @default(PENDING)
+  uploadToken  String?  // JWT token pour upload sécurisé
+  uploadExpiry DateTime? // Expiration token (5 min)
+  uploadError  String?  // Message d'erreur si FAILED
+
+  // AI Enhancement (images DISP/DECD uniquement)
+  isEnhanced          Boolean @default(false)
+  originalMediaId     String?
+  originalMedia       Media?  @relation("MediaEnhancement", fields: [originalMediaId], references: [id], onDelete: SetNull)
+  enhancedVersions    Media[] @relation("MediaEnhancement")
+  enhancementMetadata Json?   // { model, processingTime, cost }
+
+  // Relations vers dérivés et transcriptions
+  derivatives    MediaDerivative[]
+  transcriptions Transcription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([alertId, type, position]) // Requête rapide par alerte+type+position
+  @@index([alertId, type])
+  @@index([userId])
+  @@index([checksum]) // Détection doublons
+  @@index([uploadStatus])
+  @@index([uploadExpiry]) // Cleanup tokens expirés
+}
+
+// Dérivés générés (thumbnails, previews, waveforms)
+model MediaDerivative {
+  id          String   @id @default(uuid())
+
+  // Relation vers média parent
+  mediaId     String
+  media       Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  // Type de dérivé
+  derivativeType DerivativeType // THUMBNAIL | MEDIUM | LARGE | PREVIEW | WAVEFORM
+
+  // Stockage
+  filename    String   // {mediaId}-thumb.jpg
+  path        String   // /uploads/alerts/{alertId}/media/{mediaId}/thumb.jpg
+  url         String
+  size        Int
+  mimeType    String
+
+  // Dimensions (si applicable)
+  width       Int?
+  height      Int?
+  duration    Float?   // Pour previews vidéo
+
+  // Métadonnées de génération
+  generatedBy String?  // "sharp", "ffmpeg", "cloudinary"
+  metadata    Json?    // Params de génération: quality, compression, etc.
+
+  createdAt   DateTime @default(now())
+
+  @@unique([mediaId, derivativeType]) // Un seul thumbnail par média
+  @@index([mediaId])
+}
+
+// Transcriptions audio (versionnées)
+model Transcription {
+  id          String   @id @default(uuid())
+
+  // Relation vers audio
+  mediaId     String
+  media       Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  // Contenu transcription
+  text        String   @db.Text
+  language    String?  // "fr", "en"
+  confidence  Float?   // 0.0-1.0
+
+  // Version et source
+  version     Int      // Auto-incrémenté (1, 2, 3...)
+  source      TranscriptionSource // AUTO | HUMAN_CORRECTED | MANUAL
+  model       String?  // "openai-whisper-1" ou null
+
+  // Métadonnées
+  metadata    Json?    // Word timestamps, alternatives, etc.
+
+  // Qui a créé/corrigé
+  createdBy   String?
+  creator     User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  // Statut
+  isActive    Boolean  @default(false) // Une seule version active
+
+  createdAt   DateTime @default(now())
+
+  @@index([mediaId, version])
+  @@index([mediaId, isActive]) // Récupérer la meilleure transcription
+}
+
+// ============ ENUMS ============
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+enum UploadStatus {
+  PENDING      // Slot réservé, upload pas encore commencé
+  UPLOADING    // Upload en cours
+  PROCESSING   // Upload terminé, génération dérivés en cours
+  COMPLETED    // Tout terminé
+  FAILED       // Échec
+}
+
+enum DerivativeType {
+  THUMBNAIL    // 150x150px
+  MEDIUM       // 800x600px
+  LARGE        // 1920x1080px
+  PREVIEW      // Vidéo: 10s clip
+  WAVEFORM     // Audio: SVG visualization
+}
+
+enum TranscriptionSource {
+  AUTO              // Généré par Whisper
+  HUMAN_CORRECTED   // Corrigé par humain
+  MANUAL            // Saisi manuellement
+}
+
+// ============ NEWS AGGREGATION MODELS ============
+
+model NewsArticle {
+  id              String   @id @default(uuid())
+
+  // Métadonnées de base
+  title           String
+  summary         String?  @db.Text
+  content         String   @db.Text
+
+  // Source
+  sourceUrl       String   // URL de l'article original
+  sourceName      String   // Nom de la source (ex: "Cameroon Tribune")
+  sourceId        String?  // ID de la source dans sources.js
+
+  // Catégorisation
+  categories      String[] // ["sécurité", "transport", "santé"]
+  primaryCategory String?  // Catégorie principale
+
+  // Localisation
+  location        Json?    // { country: "CM", city: "Yaoundé", coordinates: {...} }
+
+  // Dates
+  publishedAt     DateTime // Date de publication par la source
+  scrapedAt       DateTime @default(now()) // Date de scraping
+
+  // Scoring et pertinence
+  relevanceScore  Float?   // 0.0-1.0 basé sur keywords et algorithme
+  priority        String   @default("medium") // "low", "medium", "high"
+
+  // Médias associés
+  imageUrl        String?  // Image principale (URL externe)
+  images          Json?    // Array d'URLs d'images supplémentaires
+
+  // Relations avec alertes JAPAP
+  relatedAlertIds String[] // IDs des alertes liées
+
+  // Métadonnées enrichies
+  author          String?  // Auteur de l'article
+  tags            String[] // Tags additionnels
+  language        String   @default("fr") // "fr", "en"
+
+  // Statut et affichage
+  isActive        Boolean  @default(true)
+  isVerified      Boolean  @default(false) // Vérifié par modérateur
+  views           Int      @default(0)
+
+  // SEO et identifiants
+  slug            String?  @unique // URL-friendly identifier
+  externalId      String?  // ID dans le système de la source
+
+  // Métadonnées supplémentaires
+  metadata        Json?    // Champs flexibles: scraperVersion, rawData, etc.
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([publishedAt])
+  @@index([scrapedAt])
+  @@index([primaryCategory])
+  @@index([relevanceScore])
+  @@index([sourceName])
+  @@index([isActive, publishedAt])
+  @@map("news_articles")
+}
+
+model NewsSource {
+  id              String   @id @default(uuid())
+
+  // Informations de base
+  name            String   @unique // "Cameroon Tribune"
+  url             String   // URL du flux RSS ou site
+  type            String   // "rss", "scraper", "api"
+
+  // Configuration
+  category        String[] // ["general", "politique"]
+  location        Json?    // { country: "CM", city: "Yaoundé" }
+
+  // État et performance
+  isActive        Boolean  @default(true)
+  lastScraped     DateTime?
+  lastSuccess     DateTime?
+  lastError       String?
+
+  // Statistiques
+  articleCount    Int      @default(0)
+  errorCount      Int      @default(0)
+  successRate     Float?   // 0.0-1.0
+
+  // Configuration de scraping
+  scrapingConfig  Json?    // { interval: "0 */2 * * *", maxArticles: 20, ... }
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([lastScraped])
+  @@map("news_sources")
 }

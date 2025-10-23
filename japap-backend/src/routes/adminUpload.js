@@ -7,6 +7,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const imageController = require('../controllers/imageController');
+const { triggerCategoryImageEnhancement } = require('../middleware/categoryImageEnhancement');
 
 // Configuration multer pour gérer les uploads en mémoire
 const upload = multer({
@@ -151,6 +152,20 @@ router.post(
       });
 
       console.log(`✅ [ADMIN] Image uploadée: ${fileInfo.path} (${(fileInfo.size / 1024).toFixed(2)} KB)`);
+
+      // Trigger automatic image enhancement for specific categories (DISP, DECD)
+      if (category === 'alert' && entityId) {
+        // Get alert category to check if enhancement needed
+        const alert = await prisma.alert.findUnique({
+          where: { id: entityId },
+          select: { category: true },
+        });
+
+        if (alert && alert.category) {
+          // This runs asynchronously in background
+          triggerCategoryImageEnhancement(imageRecord, alert.category, entityId);
+        }
+      }
 
       await prisma.$disconnect();
 
