@@ -14,9 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useRouter } from 'expo-router';
-import { getAllAlerts, type Alert, type CategoryAlert } from '@/services/api';
+import { getAllAlerts, shareAlert, type Alert, type CategoryAlert } from '@/services/api';
 import CategorySelectionModal from '@/components/CategorySelectionModal';
 import AlertDetailFormModal from '@/components/AlertDetailFormModal';
+import AlertDetailView from '@/components/AlertDetailView';
+import AlertSuccessModal from '@/components/AlertSuccessModal';
 import Toast from '@/components/Toast';
 
 export default function AlertsScreen() {
@@ -28,6 +30,10 @@ export default function AlertsScreen() {
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [formModalVisible, setFormModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryAlert | null>(null);
+  const [detailViewVisible, setDetailViewVisible] = useState(false);
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdAlert, setCreatedAlert] = useState<Alert | null>(null);
 
   // Alerts list state
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -96,13 +102,63 @@ export default function AlertsScreen() {
     setCategoryModalVisible(true);
   };
 
+  const handleAlertCreatedCallback = (alert: Alert) => {
+    // Sauvegarder l'alerte créée et afficher la modal de succès
+    setCreatedAlert(alert);
+    setShowSuccessModal(true);
+  };
+
   const handleAlertCreated = () => {
+    // Fermer les modals de création
     handleCloseModals();
-    fetchAlerts(); // Refresh the list
+  };
+
+  const handleShareAlert = async () => {
+    if (!createdAlert) return;
+
+    try {
+      const result = await shareAlert(createdAlert.id);
+
+      if (result.success) {
+        showToast('Alerte partagée avec succès ! 🎉', 'success');
+
+        // Rafraîchir la liste des alertes après un court délai
+        setTimeout(() => {
+          fetchAlerts();
+        }, 1500);
+      } else {
+        showToast(result.error || 'Erreur lors du partage', 'error');
+      }
+    } catch (error) {
+      console.error('Error sharing alert:', error);
+      showToast('Erreur lors du partage', 'error');
+    }
+  };
+
+  const handleDismissModal = () => {
+    setShowSuccessModal(false);
+    setCreatedAlert(null);
+
+    // Rafraîchir la liste des alertes
+    fetchAlerts();
+  };
+
+  const handleAlertPress = (alertId: string) => {
+    setSelectedAlertId(alertId);
+    setDetailViewVisible(true);
+  };
+
+  const handleCloseDetailView = () => {
+    setDetailViewVisible(false);
+    setSelectedAlertId(null);
   };
 
   const renderAlertItem = ({ item }: { item: Alert }) => (
-    <TouchableOpacity style={[styles.alertCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.cardBorder }]} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[styles.alertCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.cardBorder }]}
+      activeOpacity={0.8}
+      onPress={() => handleAlertPress(item.id)}
+    >
       <View style={styles.alertHeader}>
         <View style={[styles.alertCategoryBadge, { backgroundColor: theme.colors.primary }]}>
           <Text style={styles.alertCategoryText}>{item.category}</Text>
@@ -166,6 +222,21 @@ export default function AlertsScreen() {
         onClose={handleCloseModals}
         onBack={handleBackToCategories}
         onSuccess={handleAlertCreated}
+        onAlertCreated={handleAlertCreatedCallback}
+      />
+      {selectedAlertId && (
+        <AlertDetailView
+          visible={detailViewVisible}
+          alertId={selectedAlertId}
+          onClose={handleCloseDetailView}
+        />
+      )}
+      <AlertSuccessModal
+        visible={showSuccessModal}
+        alertId={createdAlert?.ref_alert_id || ''}
+        alertTitle={createdAlert?.title || ''}
+        onShare={handleShareAlert}
+        onDismiss={handleDismissModal}
       />
 
       {/* Header */}

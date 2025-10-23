@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -9,7 +9,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AlertCard, { Alert } from '@/components/Home/AlertCard';
-import AlertHeader from '@/components/Home/AlertHeader';
+import AlertHeader, { ContentType } from '@/components/Home/AlertHeader';
+import CategoryBadges from '@/components/News/CategoryBadges';
+import { ENRICHED_ARTICLES } from '@/data/mockArticles';
+import { Article } from '@/types/article';
+import { useRouter } from 'expo-router';
 
 // Mock data - À remplacer par des appels API réels
 const MOCK_ALERTS: Alert[] = [
@@ -66,34 +70,80 @@ const MOCK_ALERTS: Alert[] = [
   },
 ];
 
+// Helper function to convert Article to Alert format for display in AlertCard
+function articleToAlert(article: Article): Alert {
+  return {
+    id: article.id,
+    username: article.source.name,
+    userAvatar: article.source.logo,
+    title: article.title,
+    description: article.content.substring(0, 200) + '...', // Truncate for preview
+    location: 'Cameroun', // Simplified, could be extracted from article data
+    timeAgo: article.publishedAt,
+    images: [article.heroImage],
+    views: article.views,
+    comments: article.comments || 0,
+    confirmations: article.likes || 0,
+    followers: undefined,
+    category: article.category,
+  };
+}
+
 export default function NewsScreen() {
+  const router = useRouter();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState('nationwide');
   const [timeFilter, setTimeFilter] = useState('24h');
+  const [contentType, setContentType] = useState<ContentType>('alerts');
+  const [selectedNewsCategory, setSelectedNewsCategory] = useState<string | null>(null);
+
+  const loadAlerts = useCallback(async () => {
+    setLoading(true);
+    // Simuler un appel API
+    // TODO: Remplacer par de vrais appels API séparés pour alerts et news
+    setTimeout(() => {
+      if (contentType === 'alerts') {
+        setAlerts(MOCK_ALERTS);
+      } else {
+        // Filtrer les actualités par catégorie si une catégorie est sélectionnée
+        let articles = ENRICHED_ARTICLES;
+        if (selectedNewsCategory) {
+          articles = ENRICHED_ARTICLES.filter((article: Article) => article.category === selectedNewsCategory);
+        }
+        // Convertir les articles en format Alert pour l'affichage
+        const newsData = articles.map(articleToAlert);
+        setAlerts(newsData);
+      }
+      setLoading(false);
+    }, 1000);
+  }, [contentType, selectedNewsCategory]);
 
   // Charger les alertes initiales
   useEffect(() => {
     loadAlerts();
-  }, [scope, timeFilter]);
-
-  const loadAlerts = async () => {
-    setLoading(true);
-    // Simuler un appel API
-    setTimeout(() => {
-      setAlerts(MOCK_ALERTS);
-      setLoading(false);
-    }, 1000);
-  };
+  }, [scope, timeFilter, loadAlerts]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     // Simuler un appel API pour rafraîchir
+    // TODO: Remplacer par de vrais appels API séparés pour alerts et news
     setTimeout(() => {
-      setAlerts(MOCK_ALERTS);
+      if (contentType === 'alerts') {
+        setAlerts(MOCK_ALERTS);
+      } else {
+        // Filtrer les actualités par catégorie si une catégorie est sélectionnée
+        let articles = ENRICHED_ARTICLES;
+        if (selectedNewsCategory) {
+          articles = ENRICHED_ARTICLES.filter((article: Article) => article.category === selectedNewsCategory);
+        }
+        // Convertir les articles en format Alert pour l'affichage
+        const newsData = articles.map(articleToAlert);
+        setAlerts(newsData);
+      }
       setRefreshing(false);
-    }, 1500);
+    }, 500);
   };
 
   const handleLoadMore = () => {
@@ -102,8 +152,13 @@ export default function NewsScreen() {
   };
 
   const handleAlertPress = (alert: Alert) => {
-    // Navigation vers les détails de l'alerte
-    console.log('Alert pressed:', alert.id);
+    // Si c'est un article de news, naviguer vers la page de détail
+    if (contentType === 'news') {
+      router.push(`/article/${alert.id}` as any);
+    } else {
+      // Pour les alertes, garder le comportement actuel (navigation future)
+      console.log('Alert pressed:', alert.id);
+    }
   };
 
   const handleCommentPress = (alert: Alert) => {
@@ -132,14 +187,25 @@ export default function NewsScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      <SafeAreaView style={styles.headerContainer}>
+      <View style={styles.headerContainer}>
         <AlertHeader
           scope={scope}
           timeFilter={timeFilter}
+          contentType={contentType}
           onScopeChange={setScope}
           onTimeFilterChange={setTimeFilter}
+          onContentTypeChange={setContentType}
         />
-      </SafeAreaView>
+      </View>
+
+      {/* Category Badges - visible seulement sur l'onglet Actualités */}
+      {contentType === 'news' && (
+        <CategoryBadges
+          selectedCategory={selectedNewsCategory}
+          onCategoryChange={setSelectedNewsCategory}
+          visible={true}
+        />
+      )}
 
       {loading && alerts.length === 0 ? (
         <View style={styles.loadingContainer}>
@@ -172,21 +238,24 @@ export default function NewsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f8f8',
   },
   headerContainer: {
     backgroundColor: '#fff',
+    paddingTop: 30,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingTop: 4,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f8f8',
   },
   footer: {
     paddingVertical: 20,
     alignItems: 'center',
+    backgroundColor: '#f8f8f8',
   },
 });

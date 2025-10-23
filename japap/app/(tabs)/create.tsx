@@ -17,11 +17,12 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import * as Location from 'expo-location';
 import LoadingModal from '@/components/LoadingModal';
 import Toast from '@/components/Toast';
-import { createAlert, type CreateAlertData, type AlertLocation } from '@/services/api';
+import AlertSuccessModal from '@/components/AlertSuccessModal';
+import { createAlert, shareAlert, type CreateAlertData, type AlertLocation, type Alert as AlertType } from '@/services/api';
 import { pickImageFromGallery, pickImageFromCamera, uploadImage } from '@/services/imageUpload';
+import { getLocationWithAddress } from '@/services/locationService';
 
 // Catégories d'alertes (vous pouvez les fetch depuis l'API categoryAlerts plus tard)
 const ALERT_CATEGORIES = [
@@ -65,6 +66,8 @@ export default function CreateScreen() {
     message: '',
     type: 'success',
   });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdAlert, setCreatedAlert] = useState<AlertType | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ visible: true, message, type });
@@ -72,31 +75,26 @@ export default function CreateScreen() {
 
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        showToast('Permission de localisation refusée', 'error');
-        return;
+      console.log('🔄 Récupération de la localisation...');
+
+      const result = await getLocationWithAddress();
+
+      if (result.success && result.location) {
+        setLocation(result.location);
+        console.log('✅ Localisation récupérée avec succès');
+
+        // Informer l'utilisateur si on utilise le fallback (coordonnées GPS)
+        if (result.usedFallback) {
+          showToast('Adresse non disponible, coordonnées GPS utilisées', 'success');
+        }
+      } else {
+        // Échec complet de la récupération de la position
+        console.error('❌ Échec de la récupération de la localisation:', result.error);
+        showToast(result.error || 'Erreur lors de la récupération de la position', 'error');
       }
-
-      const currentLocation = await Location.getCurrentPositionAsync({});
-      const address = await Location.reverseGeocodeAsync({
-        latitude: currentLocation.coords.latitude,
-        longitude: currentLocation.coords.longitude,
-      });
-
-      const addressStr = address[0]
-        ? `${address[0].street || ''}, ${address[0].city || ''}, ${address[0].region || ''}`
-        : 'Position actuelle';
-
-      setLocation({
-        address: addressStr,
-        coordinates: {
-          lat: currentLocation.coords.latitude,
-          lng: currentLocation.coords.longitude,
-        },
-      });
-    } catch (error) {
-      console.error('Error getting location:', error);
+    } catch (error: any) {
+      console.error('❌ Erreur inattendue lors de la récupération de la position:', error);
+      showToast('Erreur lors de la récupération de la position', 'error');
     }
   };
 
@@ -144,6 +142,37 @@ export default function CreateScreen() {
       setImageUri(image.uri);
       setUploadedImageUrl(null); // Reset uploaded URL
     }
+  };
+
+  const handleShareAlert = async () => {
+    if (!createdAlert) return;
+
+    try {
+      // Appel API pour marquer l'alerte comme partagée
+      const result = await shareAlert(createdAlert.id);
+
+      if (result.success) {
+        showToast('Alerte partagée avec succès ! 🎉', 'success');
+
+        // Rediriger vers la page des alertes après un court délai
+        setTimeout(() => {
+          router.push('/alerts');
+        }, 1500);
+      } else {
+        showToast(result.error || 'Erreur lors du partage', 'error');
+      }
+    } catch (error) {
+      console.error('Error sharing alert:', error);
+      showToast('Erreur lors du partage', 'error');
+    }
+  };
+
+  const handleDismissModal = () => {
+    setShowSuccessModal(false);
+    setCreatedAlert(null);
+
+    // Rediriger directement vers la page des alertes
+    router.push('/alerts');
   };
 
   const handleSubmit = async () => {
@@ -205,18 +234,18 @@ export default function CreateScreen() {
 
       const result = await createAlert(alertData);
 
-      if (result.success) {
-        showToast('Alerte créée avec succès !', 'success');
+      if (result.success && result.data) {
+        // Sauvegarder l'alerte créée et afficher la modal
+        setCreatedAlert(result.data);
+        setShowSuccessModal(true);
+
         // Reset formulaire
-        setTimeout(() => {
-          setCategory('');
-          setSeverity('medium');
-          setTitle('');
-          setDescription('');
-          setImageUri(null);
-          setUploadedImageUrl(null);
-          router.push('/alerts');
-        }, 1500);
+        setCategory('');
+        setSeverity('medium');
+        setTitle('');
+        setDescription('');
+        setImageUri(null);
+        setUploadedImageUrl(null);
       } else {
         showToast(result.error || 'Erreur lors de la création', 'error');
       }
@@ -254,6 +283,13 @@ export default function CreateScreen() {
         message={toast.message}
         type={toast.type}
         onClose={() => setToast({ ...toast, visible: false })}
+      />
+      <AlertSuccessModal
+        visible={showSuccessModal}
+        alertId={createdAlert?.ref_alert_id || ''}
+        alertTitle={createdAlert?.title || ''}
+        onShare={handleShareAlert}
+        onDismiss={handleDismissModal}
       />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>

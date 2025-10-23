@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, ScrollView, Dimensions, StyleSheet } from 'react-native';
+import { View, ScrollView, Dimensions, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -7,9 +7,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface ImageCarouselProps {
   images: string[];
   height?: number;
+  onImagePress?: (index: number) => void;
 }
 
-export default function ImageCarousel({ images, height = 300 }: ImageCarouselProps) {
+export default function ImageCarousel({ images, height = 300, onImagePress }: ImageCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const handleScroll = (event: any) => {
@@ -29,12 +30,17 @@ export default function ImageCarousel({ images, height = 300 }: ImageCarouselPro
         style={{ height }}
       >
         {images.map((image, index) => (
-          <Image
+          <TouchableOpacity
             key={index}
-            source={{ uri: image }}
-            style={{ width: SCREEN_WIDTH, height, backgroundColor: '#f0f0f0' }}
-            contentFit="cover"
-          />
+            activeOpacity={0.9}
+            onPress={() => onImagePress?.(index)}
+          >
+            <Image
+              source={{ uri: image }}
+              style={{ width: SCREEN_WIDTH, height, backgroundColor: '#f0f0f0' }}
+              contentFit="cover"
+            />
+          </TouchableOpacity>
         ))}
       </ScrollView>
 

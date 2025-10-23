@@ -47,6 +47,22 @@ export interface AlertLocation {
   };
 }
 
+export interface AlertImage {
+  id: string;
+  url: string;
+  isEnhanced: boolean;
+  originalImageId?: string;
+  width: number;
+  height: number;
+  enhancementMetadata?: {
+    model: string;
+    processingTime: number;
+    cost: number;
+    timestamp: string;
+    categoryCode: string;
+  };
+}
+
 export interface Alert {
   id: string;
   ref_alert_id: string;
@@ -68,6 +84,36 @@ export interface Alert {
     email?: string;
     phone: string;
   };
+  images?: AlertImage[]; // Array of images (original + enhanced)
+}
+
+/**
+ * Get original image URL from alert
+ */
+export function getOriginalImageUrl(alert: Alert): string | null {
+  if (alert.images && alert.images.length > 0) {
+    const originalImage = alert.images.find(img => !img.isEnhanced);
+    return originalImage?.url || null;
+  }
+  return alert.mediaUrl || null;
+}
+
+/**
+ * Get enhanced image URL from alert
+ */
+export function getEnhancedImageUrl(alert: Alert): string | null {
+  if (alert.images && alert.images.length > 0) {
+    const enhancedImage = alert.images.find(img => img.isEnhanced);
+    return enhancedImage?.url || null;
+  }
+  return null;
+}
+
+/**
+ * Check if alert has enhanced version
+ */
+export function hasEnhancedVersion(alert: Alert): boolean {
+  return alert.images?.some(img => img.isEnhanced) || false;
 }
 
 export interface AlertsResponse {
@@ -383,6 +429,37 @@ export async function getCategoryByCode(code: string): Promise<{ success: boolea
     return data;
   } catch (error: any) {
     console.error('Error fetching category by code:', error);
+    return {
+      success: false,
+      error: error.message || 'Erreur de connexion au serveur',
+    };
+  }
+}
+
+/**
+ * Marque une alerte comme partagée
+ */
+export async function shareAlert(alertId: string): Promise<{ success: boolean; data?: Alert; error?: string }> {
+  try {
+    const response = await fetch(ALERTS_ENDPOINTS.SHARE(alertId), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur lors du partage de l\'alerte');
+    }
+
+    return {
+      success: true,
+      data: data.data,
+    };
+  } catch (error: any) {
+    console.error('Error sharing alert:', error);
     return {
       success: false,
       error: error.message || 'Erreur de connexion au serveur',

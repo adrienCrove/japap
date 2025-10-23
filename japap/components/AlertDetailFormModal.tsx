@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createAlert, type CategoryAlert, type AlertLocation, type CreateAlertData } from '@/services/api';
 import { pickImageFromGallery, pickImageFromCamera, uploadImage } from '@/services/imageUpload';
+import { uploadMultipleImages, type UploadProgress } from '@/services/mediaUploadApi';
 import { getLocationWithAddress } from '@/services/locationService';
 import {
   transcribeAudio,
@@ -31,6 +32,10 @@ import { useAudioRecorder, RecordingPresets } from 'expo-audio';
 import LoadingModal from '@/components/LoadingModal';
 import Toast from '@/components/Toast';
 import MiniMapView from '@/components/map/MiniMapView';
+import EnhancementLoadingModal from '@/components/EnhancementLoadingModal';
+import { createAlertWithEnhancement, shouldEnhanceCategory } from '@/services/imageEnhancementApi';
+import CategoryHelpModal from '@/components/CategoryHelpModal';
+import { getCategoryByCode, type CategoryInfo } from '@/utils/categories';
 
 
 interface AlertDetailFormModalProps {
@@ -39,6 +44,7 @@ interface AlertDetailFormModalProps {
   onClose: () => void;
   onBack: () => void;
   onSuccess: () => void;
+  onAlertCreated?: (alert: any) => void; // Callback optionnel pour passer l'alerte créée
 }
 
 const { width, height } = Dimensions.get('window');
@@ -49,6 +55,7 @@ export default function AlertDetailFormModal({
   onClose,
   onBack,
   onSuccess,
+  onAlertCreated,
 }: AlertDetailFormModalProps) {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -56,7 +63,7 @@ export default function AlertDetailFormModal({
   // Form state
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState<AlertLocation | null>(null);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]); // Up to 3 images
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isHappeningNow, setIsHappeningNow] = useState(true);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
@@ -77,6 +84,10 @@ export default function AlertDetailFormModal({
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [isEnhancing, setIsEnhancing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadProgresses, setUploadProgresses] = useState<UploadProgress[]>([]);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
     visible: false,
     message: '',
@@ -140,8 +151,13 @@ export default function AlertDetailFormModal({
     }
   }, [visible, category]);
 
-  // Image picker handlers
+  // Image picker handlers - Multi-image support (max 3)
   const handleImagePicker = () => {
+    if (imageUris.length >= 3) {
+      showToast('Maximum 3 photos autorisées', 'error');
+      return;
+    }
+
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -166,19 +182,31 @@ export default function AlertDetailFormModal({
   };
 
   const handlePickFromCamera = async () => {
+    if (imageUris.length >= 3) {
+      showToast('Maximum 3 photos autorisées', 'error');
+      return;
+    }
     const image = await pickImageFromCamera();
     if (image) {
-      setImageUri(image.uri);
+      setImageUris([...imageUris, image.uri]);
       setUploadedImageUrl(null);
     }
   };
 
   const handlePickFromGallery = async () => {
+    if (imageUris.length >= 3) {
+      showToast('Maximum 3 photos autorisées', 'error');
+      return;
+    }
     const image = await pickImageFromGallery();
     if (image) {
-      setImageUri(image.uri);
+      setImageUris([...imageUris, image.uri]);
       setUploadedImageUrl(null);
     }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setImageUris(imageUris.filter((_, i) => i !== index));
   };
 
   // Audio recording handlers
@@ -254,7 +282,7 @@ export default function AlertDetailFormModal({
     }
   };
 
-  // Submit alert
+  // Submit alert with multi-image support
   const handleSubmit = async () => {
     // Validation
     if (!description.trim()) {
@@ -273,18 +301,7 @@ export default function AlertDetailFormModal({
     try {
       setIsLoading(true);
 
-      // Upload image if present
-      let mediaUrl = uploadedImageUrl;
-      if (imageUri && !uploadedImageUrl) {
-        setLoadingMessage('Upload de l\'image...');
-        const uploadResult = await uploadImage(imageUri);
-        if (uploadResult.success && uploadResult.url) {
-          mediaUrl = uploadResult.url;
-          setUploadedImageUrl(uploadResult.url);
-        }
-      }
-
-      // Create alert
+      // Step 1: Create alert first
       setLoadingMessage('Création de l\'alerte...');
       const alertData: CreateAlertData = {
         category: category.code,
@@ -292,32 +309,84 @@ export default function AlertDetailFormModal({
         title: category.name,
         description: description.trim(),
         location,
-        mediaUrl: mediaUrl || undefined,
         userId: user.id,
         source: 'app',
       };
 
       const result = await createAlert(alertData);
 
-      if (result.success) {
-        showToast('Alerte créée avec succès !', 'success');
-        // Reset form
-        setTimeout(() => {
-          setDescription('');
-          setImageUri(null);
-          setUploadedImageUrl(null);
-          setIsHappeningNow(true);
-          onSuccess();
-        }, 1500);
-      } else {
-        showToast(result.error || 'Erreur lors de la création', 'error');
+      if (!result.success) {
+        throw new Error(result.error || 'Erreur lors de la création');
       }
+
+      const alertId = result.data?.id;
+      if (!alertId) {
+        throw new Error('ID alerte introuvable');
+      }
+
+      // Appeler le callback avec l'alerte créée si fourni
+      if (onAlertCreated && result.data) {
+        onAlertCreated(result.data);
+      }
+
+      // Step 2: Upload images if present (new three-phase workflow)
+      if (imageUris.length > 0) {
+        setLoadingMessage(`Upload de ${imageUris.length} photo${imageUris.length > 1 ? 's' : ''}...`);
+
+        try {
+          await uploadMultipleImages(
+            alertId,
+            imageUris,
+            (overallProgress, progresses) => {
+              setUploadProgress(overallProgress);
+              setUploadProgresses(progresses);
+
+              // Update loading message with progress
+              const completed = progresses.filter(p => p.phase === 'completed').length;
+              const total = imageUris.length;
+              setLoadingMessage(`Upload: ${completed}/${total} photo${total > 1 ? 's' : ''} (${overallProgress}%)`);
+            }
+          );
+
+          // Check if category requires enhancement for success message
+          const requiresEnhancement = shouldEnhanceCategory(category.code);
+          let successMessage = 'Alerte créée avec succès !';
+
+          if (requiresEnhancement && imageUris.length > 0) {
+            successMessage = '✨ Alerte créée ! Les images seront améliorées en arrière-plan.';
+          } else if (imageUris.length > 0) {
+            successMessage = `Alerte créée avec ${imageUris.length} photo${imageUris.length > 1 ? 's' : ''} !`;
+          }
+
+          showToast(successMessage, 'success');
+        } catch (uploadError: any) {
+          console.error('Upload error:', uploadError);
+          // Alert created but images failed - still show success with warning
+          showToast('Alerte créée mais erreur upload images', 'error');
+        }
+      } else {
+        showToast('Alerte créée avec succès !', 'success');
+      }
+
+      // Reset form
+      setTimeout(() => {
+        setDescription('');
+        setImageUris([]);
+        setUploadedImageUrl(null);
+        setIsHappeningNow(true);
+        setUploadProgress(0);
+        setUploadProgresses([]);
+        onSuccess();
+      }, 1500);
+
+      setIsLoading(false);
+      setLoadingMessage('');
     } catch (error: any) {
       console.error('Error submitting alert:', error);
       showToast(error.message || 'Erreur lors de la création', 'error');
-    } finally {
       setIsLoading(false);
       setLoadingMessage('');
+      setIsEnhancing(false);
     }
   };
 
@@ -327,6 +396,7 @@ export default function AlertDetailFormModal({
     <Modal visible={visible} animationType="slide" transparent={false} statusBarTranslucent>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <LoadingModal visible={isLoading} message={loadingMessage || 'Chargement...'} />
+        <EnhancementLoadingModal visible={isEnhancing} />
         <Toast
           visible={toast.visible}
           message={toast.message}
@@ -340,16 +410,21 @@ export default function AlertDetailFormModal({
             <TouchableOpacity testID="alert-back-button" onPress={onBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={theme.colors.primaryText} />
             </TouchableOpacity>
-            {/*<TouchableOpacity onPress={onClose} style={[styles.closeButton, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <Ionicons name="close" size={28} color={theme.colors.icon} />
-            </TouchableOpacity>*/}
+            <TouchableOpacity
+                onPress={() => setShowHelpModal(true)}
+                style={[styles.helpButton, { backgroundColor: theme.colors.surfaceVariant }]}
+              >
+                <Ionicons name="help-circle-outline" size={20} color={theme.colors.primary} />
+              </TouchableOpacity>
           </View>
 
           <View style={styles.headerContent}>
             <Text style={[styles.headerTitle, { color: theme.colors.primaryText }]}>Signalement de {category.name}</Text>
-            <TouchableOpacity onPress={onBack} style={[styles.editButton, { backgroundColor: theme.colors.surfaceVariant }]}>
-              <Text style={[styles.editButtonText, { color: theme.colors.primaryText }]}>Modifier</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={onBack} style={[styles.editButton, { backgroundColor: theme.colors.surfaceVariant }]}>
+                <Text style={[styles.editButtonText, { color: theme.colors.primaryText }]}>Modifier</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -485,25 +560,46 @@ export default function AlertDetailFormModal({
               )}
             </View>
 
-            {/* Photo Section */}
+            {/* Photo Section - Multi-image (max 3) */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>Photo (optionnel)</Text>
-              {imageUri ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-                  <TouchableOpacity style={[styles.removeImageButton, { backgroundColor: theme.colors.surface }]} onPress={() => setImageUri(null)}>
-                    <Ionicons name="close-circle" size={32} color={theme.colors.primary} />
+              <Text style={[styles.sectionTitle, { color: theme.colors.primaryText }]}>
+                Photos (optionnel, max 3)
+              </Text>
+              <View style={styles.imagesContainer}>
+                {/* Display existing images */}
+                {imageUris.map((uri, index) => (
+                  <View key={index} style={styles.imageSlot}>
+                    <Image source={{ uri }} style={styles.imagePreview} />
+                    <TouchableOpacity
+                      style={[styles.removeImageButton, { backgroundColor: theme.colors.surface }]}
+                      onPress={() => handleRemoveImage(index)}
+                    >
+                      <Ionicons name="close-circle" size={28} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                    <View style={[styles.imagePosition, { backgroundColor: theme.colors.primary }]}>
+                      <Text style={styles.imagePositionText}>{index + 1}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Add image button - only show if less than 3 images */}
+                {imageUris.length < 3 && (
+                  <TouchableOpacity
+                    testID="alert-photo-button"
+                    style={[styles.addImageButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                    onPress={handleImagePicker}
+                  >
+                    <Ionicons name="add-circle" size={40} color={theme.colors.primaryText} />
+                    <Text style={[styles.addImageButtonText, { color: theme.colors.secondaryText }]}>
+                      {imageUris.length === 0 ? 'Ajouter' : 'Ajouter'}
+                    </Text>
                   </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  testID="alert-photo-button"
-                  style={[styles.photoButton, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-                  onPress={handleImagePicker}
-                >
-                  <Ionicons name="camera" size={28} color={theme.colors.primaryText} />
-                  <Text style={[styles.photoButtonText, { color: theme.colors.primaryText }]}>Ajouter une photo</Text>
-                </TouchableOpacity>
+                )}
+              </View>
+              {imageUris.length > 0 && (
+                <Text style={[styles.imageCountText, { color: theme.colors.secondaryText }]}>
+                  {imageUris.length} / 3 photo{imageUris.length > 1 ? 's' : ''}
+                </Text>
               )}
             </View>
 
@@ -522,6 +618,13 @@ export default function AlertDetailFormModal({
           </TouchableOpacity>
           <Text style={[styles.notificationText, { color: theme.colors.secondaryText }]}>Les utilisateurs à proximité seront notifiés</Text>
         </View>
+
+        {/* Category Help Modal */}
+        <CategoryHelpModal
+          visible={showHelpModal}
+          onClose={() => setShowHelpModal(false)}
+          category={getCategoryByCode(category.code) || null}
+        />
       </View>
     </Modal>
   );
@@ -566,7 +669,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontFamily: 'SUSE',
     flex: 1,
-    width: '70%',
+    width: '60%',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  helpButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editButton: {
     paddingHorizontal: 16,
@@ -752,19 +867,72 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato',
     fontWeight: '600',
   },
-  imagePreviewContainer: {
+  // Multi-image styles
+  imagesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  imageSlot: {
     position: 'relative',
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    height:100,
   },
   imagePreview: {
     width: '100%',
-    height: 200,
+    height: '100%',
     borderRadius: 12,
   },
   removeImageButton: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    borderRadius: 16,
+    top: 4,
+    right: 4,
+    borderRadius: 14,
+    padding: 2,
+  },
+  imagePosition: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imagePositionText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'Lato-Bold',
+  },
+  addImageButton: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    height:100,
+  },
+  addImageButtonText: {
+    fontSize: 12,
+    fontFamily: 'Lato',
+  },
+  imageCountText: {
+    fontSize: 12,
+    fontFamily: 'Lato',
+    marginTop: 8,
+    textAlign: 'right',
+  },
+  // Legacy styles (keep for compatibility)
+  imagePreviewContainer: {
+    position: 'relative',
   },
   bottomContainer: {
     paddingHorizontal: 24,

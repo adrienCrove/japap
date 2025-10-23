@@ -20,6 +20,7 @@ export const ALERTS_ENDPOINTS = {
   GET_BY_ID: (id: string) => `${API_BASE_URL}/alerts/${id}`,
   CREATE: `${API_BASE_URL}/alerts`,
   UPDATE: (id: string) => `${API_BASE_URL}/alerts/${id}`,
+  SHARE: (id: string) => `${API_BASE_URL}/alerts/${id}/share`,
 };
 
 // Endpoints des catégories d'alertes
